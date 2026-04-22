@@ -9,6 +9,7 @@
 .profile-img {
     width: 220px;
     display: block;
+    margin: 0 auto;
 }
 
 .profile-figure figcaption {
@@ -114,4 +115,14 @@ footer {
 
 .post-preview h3 {
     margin: 0;
+}
+
+.separator {
+    color: #F9D5E5;  /* lighter pink (softer accent) */
+    margin: 0 6px;
+}
+
+.post-date {
+    color: #E8A0BF;  /* your main pink */
+    font-size: 0.85em;
 }
