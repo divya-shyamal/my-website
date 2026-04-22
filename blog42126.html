@@ -17,16 +17,20 @@
 
     <main>
         <p>There is a simple trick for checking if a number is divisible by \(7\). It goes like this:<br> 
-           First, separate the number into two parts: everything except the last digit, and the last digit. For example: \(343)\ separates into \(34\) and \(3\).<br>
+           First, separate the number into two parts: everything except the last digit, and the last digit. For example: \(343\) separates into \(34\) and \(3\).<br>
            Then, take the first part, and subtract two times the second part. In our working example: \(34 - 2\cdot 3 = 28.\)
            Now, if this number is divisible by \(7\), then so is our original number! Otherwise, we are out of luck. We know \(28\) is divisble by 7. However, if our number at this step is still large, we can just repeat the process again!</p>
 
         <p> This got me thinking: is \(7\) special, or do other numbers have a similar rule? So I set out to explore this, on a flight from Iowa back to Boston.</p>
 
-        <p> We begin by proving the following fact<sup>[1]</sup>, which will in turn give us the general rule for divisibility by \(n\): For any \(r\) such that \(10r \equiv 1\), we have that \[\sum_{k=1}^\infty 10^{k-1}a_k\equiv 0 \mod n + ra_0  iff \sum_{k=0}^\infty 10^ka_k \equiv 0\mod n. \]
-            To prove the forward direction, we simply multiply both sides by \(10\), and note that \(10ra_0 \equiv a_0 \mod n\). For the reverse direction, multiply both sides by \(r\), and separate the sum into \(k=1\) to \(\infty\) and \(k=0\). The \(10r\) factor in the former sum can be dropped by our initial assumption!<br>
+        <p> We begin by proving the following fact<sup>[1]</sup>, which will in turn give us the general rule for divisibility by \(n\): For any \(r\) such that \(10r \equiv 1\), we have that \[\sum_{k=1}^\infty 10^{k-1}a_k + ra_0\equiv 0 \bmod n   \textit{ iff } \sum_{k=0}^\infty 10^ka_k \equiv 0\bmod n. \]
+            To prove the forward direction, we simply multiply both sides by \(10\), and note that \(10ra_0 \equiv a_0 \bmod n\). For the reverse direction, multiply both sides by \(r\), and separate the sum into \(k=1\) to \(\infty\) and \(k=0\). The \(10r\) factor in the former sum can be dropped by our initial assumption!
+        </p>
+        <p>
             How is this relevant? In our example above: the number \(343\) is equivalent to \(3\cdot 10^2 + 4\cdot 10^1 + 3\cdot 10^0\). In other words, if we write \(343\) as it's sequence of digits: \(a_2 = 3, a_1 = 4, a_0 = 3\) (admittedly not the bext example due to its palindromic nature), we can write it as a linear combination of powers of 10. We use this representation to abstract out the rule: in the case of the rule for \(7\), the number we obtain after separating and subtracting is \(\sum_{k=1}^\infty 10^{k-1}a_k - 2a_0\).<br>
-            So what this rule translates to is: separate the number as above. Then, take the first part and add \(r\) times the last digit to it. If this is divisible by \(n\), then our original number is divisble by \(n\)!<br>
+            So what this rule translates to is: separate the number as above. Then, take the first part and add \(r\) times the last digit to it. If this is divisible by \(n\), then our original number is divisble by \(n\)!<sup>[2]</sup>
+        </p>
+        <p>
             Now, how do we find \(r\)? Does it even exist for all \(n\)? The answer is no - \(n\) must be coprime with \(10\). [This actually rules out 60% of numbers :(] You can find \(r\) by just trial and erroring through \(1\) through \(n-1\).<br>
             An easy way to think of what \(r\) is is to first find the first number that ends in \(9\) that is divisible by \(n\). Then, add \(1\) and divide by \(10\) to obtain \(r\).
         </p>
@@ -35,11 +39,12 @@
            Is \(7751\) divisible by \(23\)? Let's apply the rule. \(7751 \rightarrow 775 + 7\cdot 1 = 782 \rightarrow 78 + 7\cdot 2 = 92\) which is \(4\) times \(23\)! Or if you would like to go a step further, \(92 \rightarrow 9\cdot 7\cdot 2 = 23\). Either way, we get divisibility by \(23\)!
         </p>
 
-        <p>One final note! You may be asking: "This doesn't seem to match up with the divisibility rule for \(7\) we started with". Here's the thing: notice that in the main fact, \(r\) doesn't have to be positive. Using the procedure I described above for finding \(r\), we would find \(r\) to be \(5\), as \(50-1\) is divisible by \(7\). Once we find an initial \(r\), you can add or subtract any multiple of \(n\) to get a new \(r\). So for \(n=7\), we ca even use \(r = 5 - 7 = -2\). This is more appealing because multiplying by \(2\) is easier than multiplying by \(5\)! (Although arguably, subtracting might be harder than adding... ;)</p>
+        <p>One final note! You may be asking: "This doesn't seem to match up with the divisibility rule for \(7\) we started with". Here's the thing: notice that in the main fact, \(r\) doesn't have to be positive. Using the procedure I described above for finding \(r\), we would find \(r\) to be \(5\), as \(50-1\) is divisible by \(7\). Once we find an initial \(r\), you can add or subtract any multiple of \(n\) to get a new \(r\). So for \(n=7\), we ca even use \(r = 5 - 7 = -2\). This is more appealing because multiplying by \(2\) is easier than multiplying by \(5\)! (Although, arguably, subtracting might be harder than adding... ;)</p>
 
     </main>
 
-<footer>[1] I don't remember my thought process for coming up with this fact, but if it ever comes back to me, I will update this post!</footer>
+<footer>[1] I don't remember my thought process for coming up with this fact, but if it ever comes back to me, I will update this post!<br>
+        [2] Any exclamation marks in this post are excluseivly to add emphasis - none of them are factorials!</footer>
 
 </body>
 </html>

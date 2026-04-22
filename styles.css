@@ -1,26 +1,21 @@
 /* simple.css */
 
 .profile-figure {
-    position: fixed;
-    top: 16px;
-    right: 16px;
-    margin: 0;
+    float: right;
+    margin: 0 0 16px 32px;
     text-align: center;
 }
 
 .profile-img {
-    width: 90px;
-    height: 90px;
-    border-radius: 50%;
-    object-fit: cover;
-    object-position: top;
+    width: 220px;
     display: block;
 }
 
 .profile-figure figcaption {
     font-size: 0.75em;
     color: #666;
-    margin-top: 4px;
+    margin-top: 6px;
+    max-width: 220px;
 }
 
 /* Import the Crimson Text font from Google Fonts */
@@ -50,10 +45,36 @@ p {
 
 /* Example link styling */
 a {
-    color: #0066cc;
+    color: #E8A0BF; /* light pink */
     text-decoration: none;
 }
 
 a:hover {
+    color: #FF4D8D; /* brighter pink on hover */
     text-decoration: underline;
 }
+
+/* Footnote reference numbers (superscripts) */
+sup a {
+    color: #E8A0BF;
+}
+
+/* Footnote section at bottom */
+.footnotes {
+    color: #E8A0BF;
+    font-size: 0.9em;
+}
+
+/* Optional: soft pink background for footnotes */
+.footnotes {
+    background-color: #FFF0F5;
+    padding: 12px;
+    border-radius: 8px;
+    margin-top: 2em;
+}
+
+a {
+    transition: color 0.2s ease;
+}
+
+
