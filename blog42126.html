@@ -12,7 +12,7 @@
 </head>
 <body>
     <header>
-        <h1>A Thought Experiment in Number Theory</h1>
+        <h1>A thought experiment in number theory</h1>
     </header>
 
     <main>
@@ -21,7 +21,7 @@
            Then, take the first part, and subtract two times the second part. In our working example: \(34 - 2\cdot 3 = 28.\)
            Now, if this number is divisible by \(7\), then so is our original number! Otherwise, we are out of luck. We know \(28\) is divisble by 7. However, if our number at this step is still large, we can just repeat the process again!</p>
 
-        <p> This got me thinking: is \(7\) special, or do other numbers have a similar rule? So I set out to explore this, on a flight from Iowa back to Boston.</p>
+        <p> This got me thinking: is \(7\) special, or do other numbers have a similar rule? So I set out to explore this, on a flight from Iowa back to Boston around three months ago.</p>
 
         <p> We begin by proving the following fact<sup>[1]</sup>, which will in turn give us the general rule for divisibility by \(n\): For any \(r\) such that \(10r \equiv 1\), we have that \[\sum_{k=1}^\infty 10^{k-1}a_k + ra_0\equiv 0 \bmod n   \text{ iff } \sum_{k=0}^\infty 10^ka_k \equiv 0\bmod n. \]
             To prove the forward direction, we simply multiply both sides by \(10\), and note that \(10ra_0 \equiv a_0 \bmod n\). For the reverse direction, multiply both sides by \(r\), and separate the sum into \(k=1\) to \(\infty\) and \(k=0\). The \(10r\) factor in the former sum can be dropped by our initial assumption!
