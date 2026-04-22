@@ -77,4 +77,16 @@ a {
     transition: color 0.2s ease;
 }
 
+body a {
+    color: #E8A0BF !important;
+}
+
+body a:hover {
+    color: #FF4D8D !important;
+}
+
+a:visited {
+    color: #E8A0BF;
+}
+
 
