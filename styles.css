@@ -43,50 +43,33 @@ p {
     margin-bottom: 1.5em;
 }
 
-/* Example link styling */
-a {
-    color: #E8A0BF; /* light pink */
+a, a:visited {
+    color: #E8A0BF;
     text-decoration: none;
+    transition: color 0.2s ease;
 }
 
 a:hover {
-    color: #FF4D8D; /* brighter pink on hover */
+    color: #F9D5E5;
     text-decoration: underline;
 }
 
-/* Footnote reference numbers (superscripts) */
-sup a {
+sup {
     color: #E8A0BF;
 }
 
-/* Footnote section at bottom */
-.footnotes {
+footer {
     color: #E8A0BF;
     font-size: 0.9em;
+    margin-top: 2em;
 }
 
-/* Optional: soft pink background for footnotes */
 .footnotes {
+    font-size: 0.9em;
     background-color: #FFF0F5;
     padding: 12px;
     border-radius: 8px;
     margin-top: 2em;
-}
-
-a {
-    transition: color 0.2s ease;
-}
-
-body a {
-    color: #E8A0BF !important;
-}
-
-body a:hover {
-    color: #FF4D8D !important;
-}
-
-a:visited {
-    color: #E8A0BF;
 }
 
 
