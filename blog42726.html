@@ -1,0 +1,28 @@
+<!-- blog.html -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blog</title>
+    <link rel="stylesheet" href="styles.css"> <!-- Link to your existing CSS file -->
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+</head>
+<body>
+    <header>
+        <h1>On the convexity of variance<sup>[1]</sup></h1>
+    </header>
+
+    <main>
+        <p>This past January, my dad shared a cute fact with me: the convexity of variance depends on how you define addition!</p>
+
+        <p> The most straightforward way to define the sum of random variables is pointwise: \((X+Y)(\omega) = X(\omega)+Y(\omega).\) In this case, \( \mathbb{V}(\alpha X+(1-\alpha)Y) = \alpha^2 \mathbb{V}(X) + (1-\alpha)^2 \mathbb{V}(Y) + 2\alpha(1-\alpha) \text{Cov}(X, Y)\leq \alpha^2 \mathbb{V}(X) + (1-\alpha)^2 \mathbb{V}(Y) \leq  \alpha^2 \mathbb{V}(X) + (1-\alpha)^2 \mathbb{V}(Y) + 2\alpha(1-\alpha) \sqrt{\mathbb{V}(X)\mathbb{V}(Y)}\leq \alpha^2 \mathbb{V}(X) + (1-\alpha)^2 \mathbb{V}(Y) = (\alpha \text{sd}(X) + (1-\alpha)\text{sd}(Y))^2 \leq \alpha\mathbb{V}(X) + (1-\alpha)\mathbb{V}(Y)\), where in the last step we used the convexity of \(f(x) = x^2\). So we get convexity of variance here!</p>
+        <p> Now, another common way to define addition on random variables is with the mixture. Let's denote this by \(\oplus.\) Here, \(\mathbb{V}(\alpha X\oplus (1-\alpha)Y) = \alpha \mathbb{V}(X) + (1-\alpha)\mathbb{V}(Y) + \mathbb{V}[\cdot] \geq \alpha \mathbb{V}(X) + (1-\alpha)\mathbb{V}(Y)\), therefore in this case variance is concave.</p> 
+       
+    </main>
+
+<footer>[1] This blog post is still a work in progress!</footer>
+</body>
+</html>
