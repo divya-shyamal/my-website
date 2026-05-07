@@ -12,17 +12,63 @@
 </head>
 <body>
     <header>
-        <h1>On the convexity of variance<sup>[1]</sup></h1>
+        <h1>On the convexity of variance</h1>
     </header>
 
     <main>
         <p>This past January, my dad shared a cute fact with me: the convexity of variance depends on how you define addition!</p>
 
-        <p> The most straightforward way to define the sum of random variables is pointwise: \((X+Y)(\omega) = X(\omega)+Y(\omega).\) In this case, \( \mathbb{V}(\alpha X+(1-\alpha)Y) = \alpha^2 \mathbb{V}(X) + (1-\alpha)^2 \mathbb{V}(Y) + 2\alpha(1-\alpha) \text{Cov}(X, Y)\leq \alpha^2 \mathbb{V}(X) + (1-\alpha)^2 \mathbb{V}(Y) \leq  \alpha^2 \mathbb{V}(X) + (1-\alpha)^2 \mathbb{V}(Y) + 2\alpha(1-\alpha) \sqrt{\mathbb{V}(X)\mathbb{V}(Y)}\leq \alpha^2 \mathbb{V}(X) + (1-\alpha)^2 \mathbb{V}(Y) = (\alpha \text{sd}(X) + (1-\alpha)\text{sd}(Y))^2 \leq \alpha\mathbb{V}(X) + (1-\alpha)\mathbb{V}(Y)\), where in the last step we used the convexity of \(f(x) = x^2\). So we get convexity of variance here!</p>
-        <p> Now, another common way to define addition on random variables is with the mixture. Let's denote this by \(\oplus.\) Here, \(\mathbb{V}(\alpha X\oplus (1-\alpha)Y) = \alpha \mathbb{V}(X) + (1-\alpha)\mathbb{V}(Y) + \mathbb{V}[\cdot] \geq \alpha \mathbb{V}(X) + (1-\alpha)\mathbb{V}(Y)\), therefore in this case variance is concave.</p> 
-       
+        <p> The most straightforward way to define the sum of random variables is pointwise: \((X+Y)(\omega) = X(\omega)+Y(\omega).\) An example of this is in Monopoly, when you roll two dice and take the sum to determine your next move. You are pointwise summing the random variables which correspond to the individual dice.</p>
+        <p> In this case, 
+            \[
+            \begin{align}
+            \mathbb{V}(\alpha X+(1-\alpha)Y)
+            &= \alpha^2 \mathbb{V}(X) + (1-\alpha)^2 \mathbb{V}(Y)
+            + 2\alpha(1-\alpha)\operatorname{Cov}(X,Y)
+            \\
+
+            &\leq \alpha^2 \mathbb{V}(X) + (1-\alpha)^2 \mathbb{V}(Y)
+            + 2\alpha(1-\alpha)\sqrt{\mathbb{V}(X)\mathbb{V}(Y)}
+            && \color{#E8A0BF}{\text{// Cauchy--Schwarz}} \\
+
+            &= \left(\alpha \operatorname{sd}(X)
+            + (1-\alpha)\operatorname{sd}(Y)\right)^2
+            \\
+
+            &\leq \alpha \mathbb{V}(X) + (1-\alpha)\mathbb{V}(Y)
+            && \color{#E8A0BF}{\text{// convexity of } f(x)=x^2}
+            \end{align}
+            \]
+            So we get convexity of variance here!<sup>[1]</sup> </p>
+        <p> Now, another common way to define addition on random variables is as a mixture<sup>[2]</sup> between them. A mixture between two random variables requires an additional value: the mixture weight \(p\). Let's denote this mixture operation by \(\oplus_p.\) We define it as follows. First, define an auxiliary random variable \(Z\sim \text{Ber}(p)\). \(Z\) represents a coin flip, where the probability of landing heads is \(p\). Then, 
+        \[
+        (X \oplus_p Y)(\omega)
+        =
+        \begin{cases}
+        X(\omega), & Z(\omega) = 1, \\
+        Y(\omega), & Z(\omega) = 0.
+        \end{cases}
+        \] 
+        In words, this means that we flip a biased coin with probability \(p\) of landing heads . If the coin lands heads, we take the value of \(X\). Otherwise, we take the value of \(Y\). An example of a mixture is my commute time to work on a particular day. I take the bus with probability 0.25, and walk with probability 0.75. My commute time is therefore a mixture of the travel-time distributions of each mode of transit. This is not a sum of commute times, since I do not both walk and take the bus<sup>[3]</sup>. Instead, one mode of transportation is selected first, and the commute time is sampled from that choice.</p>
+        <p>With this definition of addition, we have
+
+        \[
+        \begin{align}
+        \mathbb{V}(X\oplus_{\alpha} Y)
+        &= \alpha \mathbb{V}(X) + (1-\alpha)\mathbb{V}(Y) + \mathbb{V}[\cdot] \\
+        &\geq \alpha \mathbb{V}(X) + (1-\alpha)\mathbb{V}(Y)
+        \end{align}
+        \]
+     
+        Therefore, in this case variance is concave, which intuitively makes sense. By adding the initial coin flip to decide which random variable to realize, we are introducing new randomness into the situation.</p>
+
+        <p> Pointwise sums combine realizations simultaneously. In the language of finance, this allows risks to partially cancel through diversification. Mixtures behave differently: they introduce uncertainty over which probabilistic regime governs the outcome. This reflects the fact that pointwise sums and mixtures represent two fundamentally different geometries of randomness.</p>
+
     </main>
 
-<footer>[1] This blog post is still a work in progress!</footer>
+<footer>[1] A finance aside: this is fundamentally why diversification in finance is a good idea!<br>
+        [2] A simple fact about the mixture is that its density is the weighted average of the densities of the original random variables! <br>
+        [3] Another finance aside<sup>4</sup>: it might be tempting to think of a financial portfolio as a mixture due to the concept of portfolio weights. However, this is actually just a pointwise sum, because all the individual stocks contribute to the final returns. That being said, mixtures arise naturally in finance through changing market “regimes,” such as bull markets, recessions, or periods of financial crisis.<br>
+        [4] Having spent two summers in quant, I feel obligated to include finance connections wherever I can.</footer>
 </body>
 </html>
