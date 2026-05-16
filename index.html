@@ -4,18 +4,101 @@
     <title>My GitHub Website</title>
     <link rel="stylesheet" href="styles.css">
 </head>
+
 <body>
     <main>
-        <figure class="profile-figure">
-            <img src="IMG_1188.png" alt="Profile photo" class="profile-img">
-            <figcaption>This is a picture my lovely boyfriend David took at our favorite cafe in Boston.<br> I perpetually have this huge smile on my face around him!</figcaption>
+
+        <figure class="profile-figure album">
+
+            <button class="album-btn left" onclick="prevPhoto()">
+                &#10094;
+            </button>
+
+            <img
+                id="album-img"
+                src="IMG_1188.png"
+                alt="Profile photo"
+                class="profile-img"
+            >
+
+            <button class="album-btn right" onclick="nextPhoto()">
+                &#10095;
+            </button>
+
+            <figcaption id="album-caption">
+                This is a picture my lovely boyfriend David took at our favorite cafe in Boston.<br>
+                I perpetually have this huge smile on my face around him!
+            </figcaption>
+
         </figure>
-        <p>Welcome to my personal website. This serves as a log for some of the things I work on in my free time, which I will update in this <a href="blog.html">blog</a>.</p>
-        <p>A little bit about myself: I grew up in Iowa with my twin brother and parents. During this time, I spent a lot of time playing the violin and doing math.<br>
-           I graduated from MIT in 2025 with degrees in Math and AI. I am pursuing a Master's at MIT this year.<br>
-           I enjoy probability and statistics, and am on a journey to become proficient in everything data and ML!<br>
-           Outside of technical ventures, some things I enjoy are playing ping pong, drawing, and being in the sun.
+
+        <p>
+            Welcome to my personal website. This serves as a log for some of the things I work on in my free time, which I will update in this
+            <a href="blog.html">blog</a>.
         </p>
+
+        <p>
+            A little bit about myself: I grew up in Iowa with my twin brother and parents.
+            During this time, I spent a lot of time playing the violin and doing math.<br>
+
+            I graduated from MIT in 2025 with degrees in Math and AI.
+            I am pursuing a Master's at MIT this year.<br>
+
+            I enjoy probability and statistics, and am on a journey to become proficient in everything data and ML!<br>
+
+            Outside of technical ventures, some things I enjoy are playing ping pong, drawing, and being in the sun.
+        </p>
+
     </main>
+
+    <script>
+        const photos = [
+
+            {
+                src: "smoothie.png",
+                caption:
+                    "This was the biggest smoothie I've ever had in my life!<br> It's almost half my size."
+            },
+
+            {
+                src: "bitersweete.png",
+                caption:
+                    "This is a picture my lovely boyfriend David took at our favorite cafe in Boston.<br>I perpetually have this huge smile on my face around him!"
+            },
+
+            
+
+            // {
+            //     src: "photo3.png",
+            //     caption:
+            //         "Caption for the third photo."
+            // }
+        ];
+
+        let currentPhoto = 0;
+
+        function updatePhoto() {
+            document.getElementById("album-img").src =
+                photos[currentPhoto].src;
+
+            document.getElementById("album-caption").innerHTML =
+                photos[currentPhoto].caption;
+        }
+
+        function nextPhoto() {
+            currentPhoto =
+                (currentPhoto + 1) % photos.length;
+
+            updatePhoto();
+        }
+
+        function prevPhoto() {
+            currentPhoto =
+                (currentPhoto - 1 + photos.length) % photos.length;
+
+            updatePhoto();
+        }
+    </script>
+
 </body>
 </html>

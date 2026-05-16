@@ -127,3 +127,33 @@ footer {
     color: #E8A0BF;  /* your main pink */
     font-size: 0.85em;
 }
+
+.album {
+    position: relative;
+    display: inline-block;
+    text-align: center;
+}
+
+.album-btn {
+    position: absolute;
+    top: 45%;
+    transform: translateY(-50%);
+    background-color: rgba(255, 255, 255, 0.7);
+    border: none;
+    font-size: 2rem;
+    cursor: pointer;
+    padding: 0.3rem 0.7rem;
+    border-radius: 50%;
+}
+
+.album-btn.left {
+    left: 10px;
+}
+
+.album-btn.right {
+    right: 10px;
+}
+
+.album-btn:hover {
+    background-color: rgba(255, 255, 255, 0.95);
+}
