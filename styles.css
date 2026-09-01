@@ -34,6 +34,29 @@
     width: 100%;
 }
 
+.post-figure {
+    float: right;
+    margin: 0 0 16px 32px;
+    text-align: center;
+    width: 293px;
+}
+
+.post-img {
+    width: 293px;
+    height: 220px;
+    object-fit: cover;
+    display: block;
+    border-radius: 50%;
+}
+
+.post-figure figcaption {
+    font-size: 0.75em;
+    color: #666;
+    margin-top: 10px;
+    line-height: 1.4;
+    width: 100%;
+}
+
 .album-btn {
     width: 40px;
     height: 40px;
