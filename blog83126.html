@@ -1,0 +1,36 @@
+<!-- blog.html -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blog</title>
+    <link rel="stylesheet" href="styles.css"> <!-- Link to your existing CSS file -->
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+</head>
+<body>
+    <header>
+        <h1>Elevator design</h1>
+    </header>
+
+    <main>
+        <figure class="post-figure">
+            <img src="pictures/walk.png" alt="A walk with David" class="post-img">
+            <figcaption>This is a picture from the walk where we discussed this question!</figcaption>
+        </figure>
+
+        <p>This past weekend, my boyfriend David posed the following question: how would you design an algorithm for an elevator? </p>
+        <p>Let's build up a solution gradually. To start - what real-time information are we getting? There's two types. First, there's requests: people requesting the elevator to come to their floor, and the didrection they intend to go to. Let's denote a request by \((f_i, s_i, t_i)\), where \(f_i\) denotes the floor number, \(s_i\in \{-1, 1\}\) denotes the direction, and \(t_i\) denotes the time of the request. Second, there's people who have just gotten in the elevator, and indicate the floor they would like to be taken to. We'll denote these requests by \((d_i, t_i)\) where \(d_i\) denotes the destination floor.</p>
+        <p>David astutely observed that with the way elevators are designed, we miss a critical piece of information: how many people are waiting to be picked up by the elevator at a given floor, or how many people inside the elevator would like to go to a certain floor. We just know that if a floor is selected, at least one person would like to go there. This is a hinderance in designing an algorithm that would focus on minimizing people's wait times.</p>
+
+       
+    </main>
+
+<!-- <footer>[1] A finance aside: this is fundamentally why diversification in finance is a good idea!<br>
+        [2] A simple fact about the mixture is that its density is the weighted average of the densities of the original random variables! <br>
+        [3] Another finance aside<sup>4</sup>: it might be tempting to think of a financial portfolio as a mixture due to the concept of portfolio weights. However, this is actually just a pointwise sum, because all the individual stocks contribute to the final returns. That being said, mixtures arise naturally in finance through changing market “regimes,” such as bull markets, recessions, or periods of financial crisis.<br>
+        [4] Having spent two summers in quant, I feel obligated to include finance connections wherever I can.</footer> -->
+</body>
+</html>
