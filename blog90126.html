@@ -8,6 +8,7 @@
     <title>Blog</title>
     <link rel="stylesheet" href="styles.css"> <!-- Link to your existing CSS file -->
     <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
 </head>
 <body>
@@ -18,15 +19,239 @@
     <main>
         <p>Every day at work, I lock up my laptop for the night (working with clients means top-secret data!) The lock is a standard 3-digit lock, inset into a cabinet. I always shuffle it after, but I've realized my shuffling strategy isn't the most sophisticated: I just give the digits a push or two, with one finger per digit. This results in a shuffle where each digit has been displaced around the same amount. So I want to figure out whether the original passcode is recoverable from just seeing my shuffled versions. We'll come up with an algorithm to produce an estimate of the original passcode based on a collection of shuffled passcodes. If this algorithm is successful, I'll have to change my shuffling strategy!</p>
         <p>First, I have to model my shuffle strategy. Let's say the shuffle is defined by three numbers \(p_1, p_2, p_3\), where this is the amount I rotated each digit. Let's also assume \(1\leq p_i\leq 10\). We'll model the likeelihood of a shuffle in the following way: the likelihood depends only on \(\max p_i - \min p_i\). So shuffles where \(p_1 = p_2 = p_3\) is most likely. Then if \(\max p_i - \min p_i = 1\), we'll say this is only slightly less likely - let's say 80% as likely. Given this approximation, we'll say \(l(p_1, p_2, p_3) \propto .8^{\max p_i - \min p_i}\). </p>
-        <p>Let's say we've observed \(n\) passwords, \(y_1y_2y_3^{(i)}\). Under this model, the log likelihood of password \(x_1x_2x_3\) is \(\sum_{i=1}^n(\max(p_1^{(i)}, p_2^{(i)}, p_3^{(i)}) - \min(p_1^{(i)}, p_2^{(i)}, p_3^{(i)}) )\), where \(p_j^{(i)} = y_j^{(i)} - x_j \text{ mod } 10 \).</p>
-        <p>Let's throw this optimzation problem into a computer program. The password didn't show up in the top 100 candidates! It was rank 289. Turns out, this model is bad, because I tend to shuffle by more than 10 digits at a time.</p> 
-        <p>My attempt to account for this is to add some flexibility: for every term in the sum, for a given password, I'll allow the possibility of a wrap-around: you may add \(10\) to any of the p values, and take the minimum spread of any of these \(8\) possiblities. The new rank is 788, which is much worse.</p>
-        <p>To be fair, I only gave the algorithm four observations. On one hand, I'm glad my shuffle algorithm isn't decodable (yet), but on the other I'm disappointed that my algorithm failed.</p>
-        <p>I'll report back when I gather more data!</p>
+        <p>Let's say we've observed \(n\) passwords, \(y_1^{(i)}y_2^{(i)}y_3^{(i)}\). Under this model, the negative log-likelihood of password \(x_1x_2x_3\) is proportional to \(\sum_{i=1}^n(\max(p_1^{(i)}, p_2^{(i)}, p_3^{(i)}) - \min(p_1^{(i)}, p_2^{(i)}, p_3^{(i)}) )\), where \(p_j^{(i)} = y_j^{(i)} - x_j \text{ mod } 10 \). Turns out the choice of \(80\%\) doesn't matter - ultimately, we are just minimizing the total amount we deviate from the digits having been equally rotated.</p>
+        <p>Let's throw this minimization problem into a computer program. There are a total of \(1000\) possible passcodes, so we can use a brute-force approach.</p>
+        <p>Turns out this algorithm has a flaw. Let's say the first digit is \(3\), and I shuffle it to a \(4\). Then \(p_1 = 1\), but it's much more likely that it is \(11\). This can throw off the spread term quite a bit. To account for this, I add some flexibility: for every term in the sum, I'll allow the possibility of a wrap-around: you may add \(10\) to any subset of \(\{p_1, p_2, p_3\}\), and assign the minimum spread of any of these \(8\) possiblities as the term in the sum. What this is saying is that we don't know of \(p_1\) is \(1\) or \(11\): take the value that would benefit the objective the most. This makes the brute-force seven times slower, but it's still extremely fast!</p>
+        <p>This actually helped quite a bit! Below we plot the rank of the true password as we give our algorithm more data - up to \(18\) datapoints.</p>
+
+        <figure class="chart-figure">
+            <div class="chart-box"><canvas id="rankChart"></canvas></div>
+            <figcaption>Rank of the true password under each algorithm, as the number of observed shuffles grows.</figcaption>
+        </figure>
+
+        <p>The true password is elusive. We see that with the wraparound addition, the rank of the true password became as low as four. However, it seems that we have converged to rank \(42\) with both algorithms. While I'm glad my shuffle algorithm isn't decodable (yet!), I feel we can do better.</p>
+        <p>What I notice is that there are some outliers that are driving the algorithms away from the true password. While we could allow the algorithm to "drop" two outliers - this actually helps the rank - let's look more closely at these outliers. What I find is that in these cases, it looks like two of the \(p_i\)'s are close to eachother, but the other is way off. And then it comes back to me - sometimes, when I am shuffling, my index finger slips. This would explain this pattern exactly!</p>
+        <p>Let's modify the algorithm to account for this behavior. For shuffles that seem like outliers, let's allow the objective to fall back to computing the minimum spread over pairs of digits. But, we must also add a penalization for how many times the algorithm fell back! The parameters we can control here are: the threshold at which the algorithm falls back, \(\tau\), and the penalization constant, \(\lambda\). Here's the objective for a single term<sup>[1]</sup>: we compute the wraparound distance. If it's more than \(2\), we compute the fallback wraparound: we compute the wraparound for all pairs of digits, and take the minimum. Then if we had to fallback for this shuffle, we add \(\lambda = 10\) to the objective.</p>
+        <p>Turns out a threshold of \(1\) is too strict: this algorithm is worse than our simple ones. However, with \(\tau = 2\) and \(\lambda \geq 8\), the true password jumps to rank \(1\) (although tying with nine other passwords, to my dissapointment). </p>
+        <figure class="chart-figure">
+            <div class="chart-box"><canvas id="lambdaChart"></canvas></div>
+            <figcaption>Rank of the true password for a range of penalization constants, at threshold \(\tau = 2\).</figcaption>
+        </figure>
+
+        <p>Yay! We've constructed an algorithm that recovers the true password (ignoring ties!) This was a fun problem because the first algorithm I came up with was far from optimal, but we got there, eventually. I'm not done yet though - I'll keep collecting data until I'm able to eliminate the tie.</p>
+
+        <figure class="chart-figure">
+            <div class="chart-box"><canvas id="finalChart"></canvas></div>
+            <figcaption>The naive algorithm against the final fallback algorithm at \(\lambda = 8\).</figcaption>
+        </figure>
 
     </main>
 
-<!-- <footer>[1] <br>
-        [2] </footer> -->
+<footer>
+    <p>[1] I didn't include the mathematical objective in the main body of this blog because it is quite ugly. For completeness, here it is:</p>
+
+    <p>Recall that \(p_j^{(i)} = (y_j^{(i)} - x_j) \bmod 10\) for each string \(i = 1,\dots,n\) and digit position \(j \in \{1,2,3\}\). For a finite set of numbers \(A\) with \(|A| = m\), define the wraparound distance</p>
+
+    <div class="display-eq">
+    \[
+    d(A) = \min_{s \in \{0,1\}^m} \left[\max_j (a_j + 10 s_j) - \min_j (a_j + 10 s_j)\right]
+    \]
+    </div>
+
+    <p>where \(a_j\) ranges over the elements of \(A\). Then, fixing a threshold \(\tau\), the score for string \(i\) is</p>
+
+    <div class="display-eq">
+    \[
+    \text{score}_i(x) = d(\{p_1^{(i)}, p_2^{(i)}, p_3^{(i)}\})
+    \]
+    </div>
+
+    <p>if \(d(\{p_1^{(i)}, p_2^{(i)}, p_3^{(i)}\}) \leq \tau\), and otherwise</p>
+
+    <div class="display-eq">
+    \[
+    \text{score}_i(x) = \min_{j \neq k} d(\{p_j^{(i)}, p_k^{(i)}\})
+    \]
+    </div>
+
+    <p>The fallback count is</p>
+
+    <div class="display-eq">
+    \[
+    F(x) = \sum_{i=1}^n \mathbb{1}\left[d(\{p_1^{(i)}, p_2^{(i)}, p_3^{(i)}\}) > \tau\right]
+    \]
+    </div>
+
+    <p>giving the regularized objective</p>
+
+    <div class="display-eq">
+    \[
+    J_\lambda(x_1,x_2,x_3) = \sum_{i=1}^n \text{score}_i(x) + \lambda\,F(x)
+    \]
+    </div>
+
+    <p>which we minimize over \(x_1, x_2, x_3 \in \{0,\dots,9\}\).</p>
+</footer>
+
+<script>
+const crosshair = {
+  id: 'crosshair',
+  afterDatasetsDraw(chart) {
+    const active = chart.tooltip?.getActiveElements?.();
+    if (!active || !active.length) return;
+    const x = active[0].element.x;
+    const {top, bottom} = chart.chartArea;
+    const c = chart.ctx;
+    c.save();
+    c.strokeStyle = '#d9c3cd';
+    c.lineWidth = 1;
+    c.beginPath();
+    c.moveTo(x, top);
+    c.lineTo(x, bottom);
+    c.stroke();
+    c.restore();
+  }
+};
+
+const serif = "'Crimson Text', serif";
+const ink = '#333';
+const muted = '#888';
+const nValues = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18];
+
+// One series, styled consistently across every chart on this page.
+function series(label, color, data) {
+  return {
+    label: label,
+    data: data,
+    borderColor: color,
+    backgroundColor: color,
+    borderWidth: 2,
+    tension: 0,
+    pointRadius: 0,
+    pointHoverRadius: 5,
+    pointHoverBackgroundColor: color,
+    pointHoverBorderColor: '#ffffff',
+    pointHoverBorderWidth: 2
+  };
+}
+
+function rankChart(canvasId, title, datasets) {
+  return new Chart(document.getElementById(canvasId), {
+    type: 'line',
+    data: { labels: nValues, datasets: datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        title: {
+          display: true,
+          text: title,
+          color: ink,
+          font: { family: serif, size: 17, weight: 'normal' },
+          padding: { top: 4, bottom: 14 }
+        },
+        legend: {
+          display: true,
+          position: 'top',
+          align: 'end',
+          labels: {
+            color: ink,
+            usePointStyle: true,
+            pointStyle: 'circle',
+            boxWidth: 8,
+            boxHeight: 8,
+            padding: 14,
+            font: { family: serif, size: 14 }
+          }
+        },
+        tooltip: {
+          backgroundColor: '#ffffff',
+          titleColor: ink,
+          bodyColor: ink,
+          borderColor: '#f3dfe7',
+          borderWidth: 1,
+          padding: 10,
+          usePointStyle: true,
+          titleFont: { family: serif, size: 14 },
+          bodyFont: { family: serif, size: 14 },
+          callbacks: {
+            title: items => `n = ${items[0].label}`,
+            label: item => `  ${item.dataset.label}: rank ${item.parsed.y}`
+          }
+        }
+      },
+      scales: {
+        x: {
+          title: {
+            display: true,
+            text: 'n',
+            color: muted,
+            font: { family: serif, size: 15, style: 'italic' },
+            padding: { top: 6 }
+          },
+          grid: { display: false },
+          border: { color: '#e5e5e5' },
+          ticks: { color: muted, font: { family: serif, size: 12 } }
+        },
+        y: {
+          title: {
+            display: true,
+            text: 'Rank',
+            color: muted,
+            font: { family: serif, size: 14 }
+          },
+          beginAtZero: true,
+          grid: { color: '#eeeeee' },
+          border: { display: false },
+          ticks: { color: muted, font: { family: serif, size: 12 } }
+        }
+      }
+    },
+    plugins: [crosshair]
+  });
+}
+
+const PINK  = '#C75B8C';
+const OLIVE = '#8C9A3B';
+
+// Sequential blue ramp: light to dark as lambda increases.
+const LAMBDA_COLORS = {
+  2: '#7FAED6',
+  4: '#5A8FC2',
+  6: '#3A6FA8',
+  8: '#1A4C78'
+};
+
+const naive      = [598, 685, 328, 659, 370, 182, 160, 119, 86, 55, 73, 66, 62, 49, 46, 42, 43, 42];
+const wraparound = [405, 751, 333, 138,  59,   7,  32,   4, 16, 16, 34, 32, 34, 34, 34, 42, 42, 42];
+
+// lambda = 8, 10 and 12 are identical at every n, so they share one series.
+const lambdaData = {
+  2: [ 71, 581, 201, 71, 11, 1, 1, 21, 1, 11, 41, 61, 71, 41, 31, 31, 41, 51],
+  4: [191, 581, 171, 31, 11, 1, 1,  1, 1,  1,  1,  1,  1, 11, 11, 11, 31, 31],
+  6: [191, 581, 171, 31, 11, 1, 1,  1, 1,  1,  1,  1,  1,  1,  1,  1, 11, 21],
+  8: [191, 581, 171, 31, 11, 1, 1,  1, 1,  1,  1,  1,  1,  1,  1,  1,  1,  1]
+};
+
+rankChart('rankChart', 'Rank of true password', [
+  series('Naive', PINK, naive),
+  series('Wraparound', OLIVE, wraparound)
+]);
+
+rankChart(
+  'lambdaChart',
+  'Effect of penalization constant',
+  // 8 covers 10 and 12 as well, since their ranks are identical at every n.
+  [2, 4, 6, 8].map(
+    L => series('λ ' + (L === 8 ? '≥' : '=') + ' ' + L, LAMBDA_COLORS[L], lambdaData[L])
+  )
+);
+
+rankChart('finalChart', 'First algorithm vs final algorithm', [
+  series('Naive', PINK, naive),
+  series('Fallback', LAMBDA_COLORS[8], lambdaData[8])
+]);
+</script>
 </body>
 </html>

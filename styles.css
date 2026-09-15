@@ -57,6 +57,33 @@
     width: 100%;
 }
 
+.chart-figure {
+    margin: 2em 0;
+}
+
+.display-eq {
+    text-align: center;
+    margin: 24px 0;
+}
+
+.chart-box {
+    position: relative;
+    height: 340px;
+    width: 100%;
+    background: #ffffff;
+    border-radius: 8px;
+    padding: 16px;
+    box-sizing: border-box;
+}
+
+.chart-figure figcaption {
+    font-size: 0.75em;
+    color: #666;
+    margin-top: 10px;
+    line-height: 1.4;
+    text-align: center;
+}
+
 .album-btn {
     width: 40px;
     height: 40px;
