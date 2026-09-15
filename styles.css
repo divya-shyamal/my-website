@@ -68,8 +68,10 @@
 
 .chart-box {
     position: relative;
-    height: 340px;
-    width: 100%;
+    width: 800px;
+    max-width: 100%;
+    aspect-ratio: 2 / 1;
+    margin: 0 auto;
     background: #ffffff;
     border-radius: 8px;
     padding: 16px;
