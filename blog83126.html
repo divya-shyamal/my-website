@@ -312,9 +312,17 @@
         return nearestOf(candidates, cur);
     };
 
-    // Directional: sweep one way, serving drop-offs and same-direction pickups,
-    // then reverse toward the nearest pending request once nothing is left ahead.
-    Simulation.prototype.scanCandidates = function (cur, dir, sameDirOnly) {
+    // Directional: sweep one way -- toward anyone positioned ahead, whichever
+    // direction THEY want -- then reverse once nothing is left ahead. Who
+    // actually boards at a stop is still governed by boardingFilter, so a
+    // wrong-direction request just waits for the reversal rather than being
+    // invisible to the elevator's notion of "is there a reason to keep going
+    // this way." (A pure same-direction filter here left such requests
+    // positioned neither "ahead" of an ascending sweep nor "behind" of the
+    // reversal check, since reversal only looks on the other side -- so they
+    // could be permanently unreachable once the elevator ran out of other
+    // work and parked.)
+    Simulation.prototype.scanCandidates = function (cur, dir) {
         var out = [];
         this.elevator.passengers.forEach(function (p) {
             var ahead = dir > 0 ? p.dest > cur : p.dest < cur;
@@ -323,7 +331,7 @@
         this.floors.forEach(function (list) {
             list.forEach(function (j) {
                 var ahead = dir > 0 ? j.origin > cur : j.origin < cur;
-                if (ahead && (!sameDirOnly || j.direction === dir)) out.push(j.origin);
+                if (ahead) out.push(j.origin);
             });
         });
         return out;
@@ -332,13 +340,13 @@
     Simulation.prototype.decideScan = function () {
         var cur = this.elevator.pos;
         var dir = this.elevator.direction || 1;
-        var ahead = this.scanCandidates(cur, dir, true);
+        var ahead = this.scanCandidates(cur, dir);
         if (ahead.length) {
             this.elevator.direction = dir;
             return nearestOf(ahead, cur);
         }
         var newDir = -dir;
-        var behind = this.scanCandidates(cur, newDir, false);
+        var behind = this.scanCandidates(cur, newDir);
         if (behind.length) {
             this.elevator.direction = newDir;
             return nearestOf(behind, cur);
