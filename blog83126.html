@@ -109,15 +109,6 @@
         return best;
     }
 
-    // Highlights whoever's best on a metric (ties all get the highlight).
-    function topSims(sims, getValue, ascending) {
-        var values = sims.map(getValue);
-        var best = ascending ? Math.min.apply(null, values) : Math.max.apply(null, values);
-        var medals = {};
-        sims.forEach(function (s) { if (getValue(s) === best) medals[s.algoKey] = 'gold'; });
-        return medals;
-    }
-
     function roundRect(ctx, x, y, w, h, r) {
         ctx.beginPath();
         ctx.moveTo(x + r, y);
@@ -156,6 +147,7 @@
 
     // A small stick figure, centered on (x, y), facing forward.
     function drawPerson(ctx, x, y, scale, color) {
+        if (!(scale > 0) || !isFinite(x) || !isFinite(y)) return;
         ctx.save();
         ctx.translate(x, y);
         ctx.strokeStyle = color;
@@ -243,6 +235,7 @@
         this.walkers = [];
         this.delivered = 0;
         this.totalWait = 0;
+        this.distance = 0;
         this.H = currentH();
         this.figScale = FLOOR_H / MAX_FLOOR_H;
         this.canvas = canvas;
@@ -461,9 +454,13 @@
             }
         } else {
             var dir = el.target > el.pos ? 1 : -1;
+            var prevPos = el.pos;
             el.pos += dir * SPEED * dt;
             if ((dir > 0 && el.pos >= el.target) || (dir < 0 && el.pos <= el.target)) {
                 el.pos = el.target;
+            }
+            this.distance += Math.abs(el.pos - prevPos);
+            if (el.pos === el.target) {
                 this.arriveAtFloor(el.target);
             }
         }
@@ -692,7 +689,6 @@
             panel.innerHTML =
                 '<div class="sim-panel-header">' +
                     '<span class="sim-panel-title">' + meta.label + '</span>' +
-                    '<span class="sim-panel-stats">Delivered: 0 &nbsp;·&nbsp; Avg wait: —</span>' +
                 '</div>' +
                 '<canvas class="sim-canvas"></canvas>' +
                 '<div class="sim-dropoff">' +
@@ -702,13 +698,84 @@
             self.panelsEl.appendChild(panel);
             var canvas = panel.querySelector('canvas');
             var sim = new Simulation(key, schedule, canvas);
-            sim.statsEl = panel.querySelector('.sim-panel-stats');
             sim.dropoffEl = panel.querySelector('.sim-dropoff-pills');
             sim.lastDestsKey = '';
             self.sims.push(sim);
         });
+        this.buildResultsPanel(ordered);
         this.lastT = null;
         this.updateChipStates();
+    };
+
+    // ---- results panel: one shared scoreboard, grouped by metric ----
+    // initialCeiling: a starting scale so bars are visible (not stuck near 0)
+    // before there's much data. The ceiling only ever grows from there, with
+    // headroom, so a bar's length reflects genuine progress over the run
+    // instead of always being rescaled to whoever's currently ahead.
+    var METRICS = [
+        { key: 'delivered', label: 'Delivered', get: function (s) { return s.delivered; }, decimals: 0, initialCeiling: 15 },
+        { key: 'wait', label: 'Avg wait (s)', get: function (s) { return s.delivered ? s.totalWait / s.delivered : 0; }, decimals: 1, initialCeiling: 15 },
+        { key: 'distance', label: 'Distance', get: function (s) { return s.distance; }, decimals: 0, initialCeiling: 60 }
+    ];
+
+    ElevatorApp.prototype.buildResultsPanel = function (orderedKeys) {
+        var panel = document.createElement('div');
+        panel.className = 'sim-panel results-panel';
+        var html = '<div class="sim-panel-header"><span class="sim-panel-title">Results</span></div>';
+        METRICS.forEach(function (m) {
+            html += '<div class="results-metric" data-metric="' + m.key + '">' +
+                '<div class="results-metric-label">' + m.label + '</div>';
+            orderedKeys.forEach(function (key) {
+                html += '<div class="results-bar-row" data-algo="' + key + '">' +
+                    '<div class="results-bar-track"><div class="results-bar-fill" style="background:' + ALGOS[key].color + '"></div></div>' +
+                    '<span class="results-bar-value"></span>' +
+                '</div>';
+            });
+            html += '</div>';
+        });
+        panel.innerHTML = html;
+        this.panelsEl.appendChild(panel);
+
+        this.resultsRefs = {};
+        this.resultsCeilings = {};
+        var self = this;
+        METRICS.forEach(function (m) {
+            self.resultsRefs[m.key] = {};
+            self.resultsCeilings[m.key] = m.initialCeiling;
+        });
+        Array.prototype.forEach.call(panel.querySelectorAll('.results-bar-row'), function (row) {
+            var metricKey = row.closest('.results-metric').getAttribute('data-metric');
+            var algoKey = row.getAttribute('data-algo');
+            self.resultsRefs[metricKey][algoKey] = {
+                fill: row.querySelector('.results-bar-fill'),
+                value: row.querySelector('.results-bar-value')
+            };
+        });
+    };
+
+    ElevatorApp.prototype.updateResultsPanel = function () {
+        var sims = this.sims;
+        if (!sims.length) return;
+        var refs = this.resultsRefs;
+        var ceilings = this.resultsCeilings;
+        METRICS.forEach(function (m) {
+            var values = sims.map(m.get);
+            var actualMax = Math.max.apply(null, values);
+            // Ratchet the ceiling up with headroom as values approach it --
+            // never down -- so bars genuinely grow instead of always being
+            // rescaled to whoever's currently ahead.
+            if (actualMax > ceilings[m.key] * 0.85) {
+                ceilings[m.key] = Math.max(actualMax * 1.35, m.initialCeiling);
+            }
+            var ceiling = ceilings[m.key];
+            sims.forEach(function (s) {
+                var ref = refs[m.key][s.algoKey];
+                if (!ref) return;
+                var v = m.get(s);
+                ref.fill.style.width = (ceiling > 0 ? Math.min(100, (v / ceiling) * 100) : 0) + '%';
+                ref.value.textContent = m.decimals ? v.toFixed(m.decimals) : String(Math.round(v));
+            });
+        });
     };
 
     ElevatorApp.prototype.observeVisibility = function () {
@@ -728,31 +795,9 @@
             this.sims.forEach(function (sim) { sim.step(dt); });
         }
         this.sims.forEach(function (sim) { sim.draw(); });
-
-        // Highlight whoever's winning on each metric -- only meaningful
-        // once there's something to compare.
-        var deliveredMedals = {}, waitMedals = {};
-        if (this.sims.length >= 2) {
-            deliveredMedals = topSims(this.sims, function (s) { return s.delivered; }, false);
-            var withDeliveries = this.sims.filter(function (s) { return s.delivered > 0; });
-            if (withDeliveries.length) {
-                waitMedals = topSims(withDeliveries, function (s) { return s.totalWait / s.delivered; }, true);
-            }
-        }
+        this.updateResultsPanel();
 
         this.sims.forEach(function (sim) {
-            var waitStr = sim.delivered ? (sim.totalWait / sim.delivered).toFixed(1) + 's' : '—';
-            var deliveredPhrase = 'Delivered: ' + sim.delivered;
-            var waitPhrase = 'Avg wait: ' + waitStr;
-            var dMedal = deliveredMedals[sim.algoKey], wMedal = waitMedals[sim.algoKey];
-            if (dMedal) {
-                deliveredPhrase = '<span class="stat-medal stat-' + dMedal + '">' + deliveredPhrase + '</span>';
-            }
-            if (wMedal) {
-                waitPhrase = '<span class="stat-medal stat-' + wMedal + '">' + waitPhrase + '</span>';
-            }
-            sim.statsEl.innerHTML = deliveredPhrase + ' &nbsp;·&nbsp; ' + waitPhrase;
-
             var dests = sim.currentDestinations();
             var key = dests.join(',');
             if (key !== sim.lastDestsKey) {
