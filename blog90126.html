@@ -42,7 +42,7 @@
 
         <figure class="chart-figure">
             <div class="chart-box"><canvas id="finalChart"></canvas></div>
-            <figcaption>The naive algorithm against the final fallback algorithm at \(\lambda = 8\).</figcaption>
+            <figcaption>The naive algorithm against the final flexible algorithm at \(\lambda = 8\).</figcaption>
         </figure>
 
     </main>
@@ -250,7 +250,7 @@ rankChart(
 
 rankChart('finalChart', 'First algorithm vs final algorithm', [
   series('Naive', PINK, naive),
-  series('Fallback', LAMBDA_COLORS[8], lambdaData[8])
+  series('Flexible', LAMBDA_COLORS[8], lambdaData[8])
 ]);
 </script>
 </body>

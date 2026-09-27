@@ -22,15 +22,747 @@
         </figure>
 
         <p>This past weekend, my boyfriend David posed the following question: how would you design an algorithm for an elevator? </p>
-        <p>David astutely observed that with the way elevators are designed, we miss a critical piece of information: how many people are waiting to be picked up by the elevator at a given floor, or how many people inside the elevator would like to go to a certain floor. We just know that if a floor is selected, at least one person would like to go there. This is a hinderance in designing an algorithm that would focus on minimizing people's wait times.</p>
+        <p>This is a very interesting problem for many reasons. David remarked that it is a problem of incomplete information. With the way elevators are designed, we miss a critical piece of information: how many people are waiting to be picked up by the elevator at a given floor, or how many people inside the elevator would like to go to a certain floor. We just know that if a floor is selected, at least one person would like to go there.</p>
         <p>David also pointed out the tradeoff between fairness and global efficiency. A fair algorithm would prioritize people based on when they requested the elevator - first come, first served. On the other hand, one could design an algorithm that aimed to minimize the cumulative wait time of people. </p>
         <p>The mechanics of the elevator matter too. Say the elevator is fast. Then stopping at a floor becomes relatively more costly.</p>
-        <p>Let's build up a solution gradually. To start - what real-time information are we getting? There's two types. First, there's requests: people requesting the elevator to come to their floor, and the didrection they intend to go to. Let's denote a request by \((f_i, s_i, t_i)\), where \(f_i\) denotes the floor number, \(s_i\in \{-1, 1\}\) denotes the direction, and \(t_i\) denotes the time of the request. Second, there's people who have just gotten in the elevator, and indicate the floor they would like to be taken to. We'll denote these requests by \((d_i, t_i)\) where \(d_i\) denotes the destination floor.</p>
-        <p>Let's try to recreate the algorithm that most elevators use. Here's my guess: let's say the elevator is currently going in a direction (either up or down). Then, it will keep a list of priority and target floors above and below it at all times. Target floors are those where: someone in the elevator would like to be dropped off. Priority floors are those where someone is requesting to be picked up at, moving in the same direction. Once the elevator has no target floors in that direction, it chooses a new direction based on who is the earliest priority floor.  </p>
-        <p>What are some inefficiencies of this algorithm? First, where the elevator "parks" is important. If most people enter or exit the elevator at the first floor, parking these might make sense. This is not a behavior I observe in some elevators. </p>
+        <p>Let's formalize the problem. There's two types of real-time information we are getting. First, there's pick-up requests, which just consists of the direction they intend to go to (up or down). Let's denote a request by \((f_i, s_i, t_i)\), where \(f_i\) denotes the floor number where the request was made, \(s_i\in \{-1, 1\}\) denotes the direction, and \(t_i\) denotes the time of the request. Second, there's drop-off requests: people who have just gotten in the elevator and indicate the floor they would like to be taken to. We'll denote these requests by \((d_i, t_i)\) where \(d_i\) denotes the destination floor.</p>
+        <p>Let's try to recreate the algorithm that most elevators use. Here's my guess: let's say the elevator is currently going in a direction (either up or down). Then, it will keep a list of pick-up and drop-off floors above and below it at all times. The elevator keeps moving in a given direction until all requests in that direction have been serviced, then it switches directions. Let's call this the "baseline" algorithm.</p>
+        <p>What are some inefficiencies of this algorithm? First, where the elevator "parks" is important. If most people enter or exit the elevator at the first floor, parking there might make sense. Frustratingly, the elevator in my work building does not exhibit this behavior!</p>
+        <p>Second, let's take the case of a really tall building, where the elevator is on a downward trajectory from floor \(n-1\) to \(1\). Let's say just as the person on \(n-1\) is picked up and requests floor \(1\), someone on floor \(n\) requests the elevator. Then the elevator will go all the way down to lobby, and leave the person on the top floor waiting for a long time. A better algorithm may have been to go up and get the person on the top floor before beginning its descent.</p>
+        <p>This, of course, is an edge case. We'll try to iteratively improve on this algorithm throughout the rest of this post. But first, let's simulate all of these algorithms, as well as first-come first-served, to see how these work in practice! As a first step towards improving the algorithm, I've included a nearest-request algorithm as well, which takes care of the edge case we mentioned earlier.</p>
 
-       
+        <p>Our simulation is based on a Poisson process, with floors \(1\) and \(3\) having a slightly higher pick-up and drop-off rate than the other residential floors.</p>
+
+        <figure class="sim-figure" id="elevatorSim">
+            <div class="sim-controls">
+                <div class="sim-toggle-group" id="algoToggle">
+                    <button class="sim-chip" data-algo="fcfs" style="--chip-color:#C75B8C">First-come, first-served</button>
+                    <button class="sim-chip" data-algo="scan" style="--chip-color:#4A6FC7">Directional</button>
+                    <button class="sim-chip" data-algo="nearest" style="--chip-color:#8C9A3B">Nearest request</button>
+                </div>
+                <div class="sim-buttons">
+                    <button class="sim-btn" id="simPlayPause">&#10074;&#10074; Pause</button>
+                    <button class="sim-btn" id="simReset">&#8635; Reset</button>
+                </div>
+            </div>
+            <div class="sim-floors-row">
+                <label class="sim-floors-label" for="simFloors">Floors: <span id="simFloorsValue">8</span></label>
+                <input type="range" id="simFloors" class="sim-floors-slider" min="4" max="30" step="1" value="8">
+            </div>
+            <div class="sim-floors-row">
+                <label class="sim-floors-label" for="simRate">Rate: <span id="simRateValue">14</span>/min</label>
+                <input type="range" id="simRate" class="sim-floors-slider" min="5" max="30" step="1" value="14">
+            </div>
+            <div class="sim-panels" id="simPanels"></div>
+        </figure>
+
     </main>
+
+<script>
+(function () {
+    'use strict';
+
+    // ---- tunables ----
+    var FLOORS = 8;
+    var CAPACITY = 5;
+    var SPEED = 1.6;          // floors per simulated second
+    var DWELL = 0.8;          // seconds doors stay open at a stop
+    var ARRIVAL_RATE = 14 / 60; // total pickups/sec, summed across every floor's own rate
+    var MAX_FIGURES = 6;      // waiting figures drawn per floor before "+N"
+    var WALK_DURATION = 0.35; // seconds to walk through the doors
+    var LOBBY_MULT = 3.0;     // floor 1: much busier, both pickups and drop-offs
+    var GYM_MULT = 1.4;       // floor 3: slightly busier than the rest
+
+    var W = 336;
+    var LABEL_W = 44, SIGNAL_W = 16, SHAFT_W = 46, GAP = 6;
+    var SHAFT_X0 = LABEL_W + SIGNAL_W, SHAFT_X1 = SHAFT_X0 + SHAFT_W;
+    var HALL_X0 = SHAFT_X1 + GAP, HALL_X1 = W - 8;
+    var TOP_PAD = 6;
+    var MAX_FLOOR_H = 32, MAX_TOTAL_H = 520;
+    var FLOOR_H = MAX_FLOOR_H; // recomputed by computeFloorH() whenever FLOORS changes
+
+    var ALGOS = {
+        fcfs:    { label: 'First-come, first-served', color: '#C75B8C' },
+        scan:    { label: 'Directional',              color: '#4A6FC7' },
+        nearest: { label: 'Nearest request',          color: '#8C9A3B' }
+    };
+    var ALGO_ORDER = ['fcfs', 'scan', 'nearest'];
+
+    // Taller buildings get proportionally shorter floors, so the panel
+    // never grows past a sane height -- capped at MAX_FLOOR_H per floor.
+    function computeFloorH() {
+        return Math.max(11, Math.min(MAX_FLOOR_H, MAX_TOTAL_H / FLOORS));
+    }
+
+    function currentH() { return TOP_PAD * 2 + FLOORS * FLOOR_H; }
+    function floorY(f) { return TOP_PAD + (FLOORS - f) * FLOOR_H; }
+    function floorCenterY(f) { return floorY(f) + FLOOR_H / 2; }
+    function posToY(pos) { return TOP_PAD + (FLOORS - pos) * FLOOR_H + FLOOR_H / 2; }
+    function signLabel(f) { return f === 1 ? 'Lobby' : (f === 3 ? 'Gym' : null); }
+
+    function nearestOf(list, cur) {
+        var best = list[0], bestDist = Math.abs(list[0] - cur);
+        for (var i = 1; i < list.length; i++) {
+            var d = Math.abs(list[i] - cur);
+            if (d < bestDist) { bestDist = d; best = list[i]; }
+        }
+        return best;
+    }
+
+    // Highlights whoever's best on a metric (ties all get the highlight).
+    function topSims(sims, getValue, ascending) {
+        var values = sims.map(getValue);
+        var best = ascending ? Math.min.apply(null, values) : Math.max.apply(null, values);
+        var medals = {};
+        sims.forEach(function (s) { if (getValue(s) === best) medals[s.algoKey] = 'gold'; });
+        return medals;
+    }
+
+    function roundRect(ctx, x, y, w, h, r) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + w, y, x + w, y + h, r);
+        ctx.arcTo(x + w, y + h, x, y + h, r);
+        ctx.arcTo(x, y + h, x, y, r);
+        ctx.arcTo(x, y, x + w, y, r);
+        ctx.closePath();
+    }
+
+    // A small call-button arrow. Lit ones glow softly in the algorithm's
+    // color rather than filling solid, so they read as "on" without
+    // looking like a plain shape.
+    function drawArrow(ctx, cx, cy, size, up, color, lit) {
+        ctx.save();
+        ctx.beginPath();
+        if (up) {
+            ctx.moveTo(cx, cy - size);
+            ctx.lineTo(cx - size, cy + size);
+            ctx.lineTo(cx + size, cy + size);
+        } else {
+            ctx.moveTo(cx, cy + size);
+            ctx.lineTo(cx - size, cy - size);
+            ctx.lineTo(cx + size, cy - size);
+        }
+        ctx.closePath();
+        if (lit) {
+            ctx.shadowColor = color;
+            ctx.shadowBlur = 7;
+            ctx.globalAlpha = 0.8;
+        }
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.restore();
+    }
+
+    // A small stick figure, centered on (x, y), facing forward.
+    function drawPerson(ctx, x, y, scale, color) {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        ctx.lineWidth = 1.6;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.arc(0, -9 * scale, 2.6 * scale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(0, -6.5 * scale);
+        ctx.lineTo(0, 2 * scale);
+        ctx.moveTo(0, -4 * scale);
+        ctx.lineTo(-3.2 * scale, -1 * scale);
+        ctx.moveTo(0, -4 * scale);
+        ctx.lineTo(3.2 * scale, -1 * scale);
+        ctx.moveTo(0, 2 * scale);
+        ctx.lineTo(-3 * scale, 7.5 * scale);
+        ctx.moveTo(0, 2 * scale);
+        ctx.lineTo(3 * scale, 7.5 * scale);
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    // ---- seeded RNG, so every algorithm sees the same arrivals ----
+    function mulberry32(a) {
+        return function () {
+            a |= 0; a = (a + 0x6D2B79F5) | 0;
+            var t = Math.imul(a ^ (a >>> 15), 1 | a);
+            t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+    }
+
+    // Floors 1 (lobby) and 3 (gym) generate -- and are requested as
+    // destinations -- more often than the rest of the building.
+    function floorWeights() {
+        var w = [];
+        for (var f = 1; f <= FLOORS; f++) {
+            if (f === 1) w.push(LOBBY_MULT);
+            else if (f === 3) w.push(GYM_MULT);
+            else w.push(1);
+        }
+        return w;
+    }
+
+    function weightedPick(rng, weights, excludeFloor) {
+        var total = 0, f;
+        for (f = 1; f <= weights.length; f++) {
+            if (f !== excludeFloor) total += weights[f - 1];
+        }
+        var r = rng() * total, acc = 0;
+        for (f = 1; f <= weights.length; f++) {
+            if (f === excludeFloor) continue;
+            acc += weights[f - 1];
+            if (r <= acc) return f;
+        }
+        for (f = weights.length; f >= 1; f--) if (f !== excludeFloor) return f;
+    }
+
+    function makeSchedule(seed) {
+        var rng = mulberry32(seed);
+        var weights = floorWeights();
+        var events = [];
+        var t = 0;
+        for (var i = 0; i < 600; i++) {
+            t += -Math.log(1 - rng()) / ARRIVAL_RATE;
+            var origin = weightedPick(rng, weights, 0);
+            var dest = weightedPick(rng, weights, origin);
+            events.push({ time: t, origin: origin, dest: dest, id: i });
+        }
+        return events;
+    }
+
+    // ---- one running elevator, for one algorithm ----
+    function Simulation(algoKey, schedule, canvas) {
+        this.algoKey = algoKey;
+        this.meta = ALGOS[algoKey];
+        this.schedule = schedule;
+        this.nextEventIndex = 0;
+        this.simTime = 0;
+        this.floors = [];
+        for (var f = 1; f <= FLOORS; f++) this.floors.push([]);
+        this.elevator = { pos: 1, target: null, direction: 0, dwellUntil: 0, passengers: [] };
+        this.walkers = [];
+        this.delivered = 0;
+        this.totalWait = 0;
+        this.H = currentH();
+        this.figScale = FLOOR_H / MAX_FLOOR_H;
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+        var dpr = window.devicePixelRatio || 1;
+        canvas.width = W * dpr;
+        canvas.height = this.H * dpr;
+        this.ctx.scale(dpr, dpr);
+    }
+
+    Simulation.prototype.floorAt = function (f) { return this.floors[f - 1]; };
+
+    Simulation.prototype.spawnDue = function () {
+        while (this.nextEventIndex < this.schedule.length &&
+               this.schedule[this.nextEventIndex].time <= this.simTime) {
+            var e = this.schedule[this.nextEventIndex++];
+            var dir = e.dest > e.origin ? 1 : -1;
+            this.floorAt(e.origin).push({
+                id: e.id, origin: e.origin, dest: e.dest,
+                arriveTime: e.time, direction: dir
+            });
+        }
+    };
+
+    Simulation.prototype.oldestUndelivered = function () {
+        var best = null;
+        this.elevator.passengers.forEach(function (p) {
+            if (!best || p.arriveTime < best.job.arriveTime) best = { job: p, boarded: true };
+        });
+        this.floors.forEach(function (list) {
+            list.forEach(function (j) {
+                if (!best || j.arriveTime < best.job.arriveTime) best = { job: j, boarded: false };
+            });
+        });
+        return best;
+    };
+
+    // Fair: always chase whichever job has been waiting longest, start to finish.
+    Simulation.prototype.decideFCFS = function () {
+        var focus = this.oldestUndelivered();
+        if (!focus) return null;
+        if (!focus.boarded && this.elevator.passengers.length >= CAPACITY) {
+            // Can't board the focus job yet -- clear space by delivering
+            // whoever's already aboard, oldest first, instead of stalling.
+            var oldestAboard = null;
+            this.elevator.passengers.forEach(function (p) {
+                if (!oldestAboard || p.arriveTime < oldestAboard.arriveTime) oldestAboard = p;
+            });
+            return oldestAboard ? oldestAboard.dest : focus.job.origin;
+        }
+        return focus.boarded ? focus.job.dest : focus.job.origin;
+    };
+
+    // Greedy: always head for the closest pending pickup or drop-off.
+    Simulation.prototype.decideNearest = function () {
+        var cur = this.elevator.pos;
+        var candidates = [];
+        this.elevator.passengers.forEach(function (p) { candidates.push(p.dest); });
+        if (this.elevator.passengers.length < CAPACITY) {
+            // Only chase a pickup if there's room -- otherwise a nearby but
+            // unboardable request can fixate the elevator forever.
+            this.floors.forEach(function (list) {
+                list.forEach(function (j) { candidates.push(j.origin); });
+            });
+        }
+        if (!candidates.length) return null;
+        return nearestOf(candidates, cur);
+    };
+
+    // Directional: sweep one way, serving drop-offs and same-direction pickups,
+    // then reverse toward the nearest pending request once nothing is left ahead.
+    Simulation.prototype.scanCandidates = function (cur, dir, sameDirOnly) {
+        var out = [];
+        this.elevator.passengers.forEach(function (p) {
+            var ahead = dir > 0 ? p.dest > cur : p.dest < cur;
+            if (ahead) out.push(p.dest);
+        });
+        this.floors.forEach(function (list) {
+            list.forEach(function (j) {
+                var ahead = dir > 0 ? j.origin > cur : j.origin < cur;
+                if (ahead && (!sameDirOnly || j.direction === dir)) out.push(j.origin);
+            });
+        });
+        return out;
+    };
+
+    Simulation.prototype.decideScan = function () {
+        var cur = this.elevator.pos;
+        var dir = this.elevator.direction || 1;
+        var ahead = this.scanCandidates(cur, dir, true);
+        if (ahead.length) {
+            this.elevator.direction = dir;
+            return nearestOf(ahead, cur);
+        }
+        var newDir = -dir;
+        var behind = this.scanCandidates(cur, newDir, false);
+        if (behind.length) {
+            this.elevator.direction = newDir;
+            return nearestOf(behind, cur);
+        }
+        return null;
+    };
+
+    Simulation.prototype.computeNext = function () {
+        if (this.algoKey === 'fcfs') return this.decideFCFS();
+        if (this.algoKey === 'nearest') return this.decideNearest();
+        return this.decideScan();
+    };
+
+    Simulation.prototype.boardingFilter = function (job) {
+        if (this.algoKey === 'scan' && this.elevator.direction !== 0) {
+            return job.direction === this.elevator.direction;
+        }
+        return true;
+    };
+
+    Simulation.prototype.spawnWalker = function (jobId, floor, kind) {
+        var y = floorCenterY(floor);
+        var hallX = HALL_X0 + 10;
+        var carX = SHAFT_X0 + SHAFT_W / 2;
+        this.walkers.push({
+            jobId: jobId,
+            from: kind === 'board' ? { x: hallX, y: y } : { x: carX, y: y },
+            to: kind === 'board' ? { x: carX, y: y } : { x: hallX, y: y },
+            kind: kind,
+            start: this.simTime
+        });
+    };
+
+    Simulation.prototype.boardAt = function (floor) {
+        // Let anyone waiting here board, subject to capacity and direction.
+        var waiting = this.floorAt(floor);
+        var remaining = [];
+        for (var i = 0; i < waiting.length; i++) {
+            var job = waiting[i];
+            if (this.elevator.passengers.length < CAPACITY && this.boardingFilter(job)) {
+                this.elevator.passengers.push(job);
+                this.spawnWalker(job.id, floor, 'board');
+            } else {
+                remaining.push(job);
+            }
+        }
+        this.floors[floor - 1] = remaining;
+    };
+
+    Simulation.prototype.reboardHere = function () {
+        // SCAN just flipped direction while parked at a terminal-ish floor --
+        // let anyone waiting here for the new direction on before departing,
+        // instead of leaving them behind for a full sweep of the building.
+        this.boardAt(Math.round(this.elevator.pos));
+    };
+
+    Simulation.prototype.decide = function () {
+        var prevDirection = this.elevator.direction;
+        this.elevator.target = this.computeNext();
+        if (this.algoKey === 'scan' && this.elevator.direction !== prevDirection) {
+            this.reboardHere();
+            this.elevator.target = this.computeNext();
+        }
+        if (this.elevator.target === null) {
+            // SCAN never considers its own floor "ahead" in either direction,
+            // so if the only demand left is someone waiting right here, it
+            // would otherwise sit forever. Board them -- direction no longer
+            // means anything for a sweep that's found nothing to sweep toward.
+            var floor = Math.round(this.elevator.pos);
+            var before = this.elevator.passengers.length;
+            if (this.algoKey === 'scan') this.elevator.direction = 0;
+            this.boardAt(floor);
+            if (this.elevator.passengers.length > before) {
+                this.elevator.target = this.computeNext();
+            }
+        }
+    };
+
+    Simulation.prototype.arriveAtFloor = function (floor) {
+        var self = this;
+        var stillOn = [];
+        this.elevator.passengers.forEach(function (p) {
+            if (p.dest === floor) {
+                self.delivered++;
+                self.totalWait += self.simTime - p.arriveTime;
+                self.spawnWalker(p.id, floor, 'alight');
+            } else stillOn.push(p);
+        });
+        this.elevator.passengers = stillOn;
+
+        this.boardAt(floor);
+
+        this.elevator.pos = floor;
+        this.elevator.dwellUntil = this.simTime + DWELL;
+        this.elevator.target = null;
+    };
+
+    Simulation.prototype.step = function (dt) {
+        this.simTime += dt;
+        this.spawnDue();
+        var self = this;
+        this.walkers = this.walkers.filter(function (w) { return self.simTime - w.start < WALK_DURATION; });
+
+        var el = this.elevator;
+        if (el.dwellUntil > this.simTime) {
+            // doors open, nothing to do yet
+        } else if (el.target === null) {
+            this.decide();
+            if (el.target !== null && Math.round(el.pos) === el.target) {
+                // Already there -- reopen doors for anyone who just showed up.
+                this.arriveAtFloor(el.target);
+            }
+        } else {
+            var dir = el.target > el.pos ? 1 : -1;
+            el.pos += dir * SPEED * dt;
+            if ((dir > 0 && el.pos >= el.target) || (dir < 0 && el.pos <= el.target)) {
+                el.pos = el.target;
+                this.arriveAtFloor(el.target);
+            }
+        }
+    };
+
+    Simulation.prototype.currentDestinations = function () {
+        var seen = {};
+        var unique = [];
+        this.elevator.passengers.forEach(function (p) {
+            if (!seen[p.dest]) { seen[p.dest] = true; unique.push(p.dest); }
+        });
+        unique.sort(function (a, b) { return a - b; });
+        return unique;
+    };
+
+    Simulation.prototype.draw = function () {
+        var ctx = this.ctx;
+        ctx.clearRect(0, 0, W, this.H);
+
+        // shaft background
+        ctx.fillStyle = '#f7f7f7';
+        ctx.fillRect(SHAFT_X0, TOP_PAD, SHAFT_W, FLOORS * FLOOR_H);
+
+        // floor lines
+        ctx.strokeStyle = '#eee';
+        ctx.lineWidth = 1;
+        for (var k = 0; k <= FLOORS; k++) {
+            var ly = TOP_PAD + k * FLOOR_H;
+            ctx.beginPath();
+            ctx.moveTo(LABEL_W, ly);
+            ctx.lineTo(W - 8, ly);
+            ctx.stroke();
+        }
+
+        // floor labels: a plain number, or a cute sign for the lobby / gym
+        ctx.textBaseline = 'middle';
+        for (var f = 1; f <= FLOORS; f++) {
+            var fy = floorCenterY(f);
+            var sign = signLabel(f);
+            if (sign) {
+                ctx.font = '9.5px "Crimson Text", serif';
+                ctx.textAlign = 'left';
+                var tw = ctx.measureText(sign).width;
+                var badgeW = tw + 10, badgeH = 15;
+                ctx.fillStyle = this.meta.color + '26';
+                roundRect(ctx, 3, fy - badgeH / 2, badgeW, badgeH, 7);
+                ctx.fill();
+                ctx.fillStyle = this.meta.color;
+                ctx.fillText(sign, 8, fy + 0.5);
+            } else {
+                ctx.font = '11px "Crimson Text", serif';
+                ctx.fillStyle = '#999';
+                ctx.textAlign = 'left';
+                ctx.fillText(String(f), 4, fy);
+            }
+
+            // call-button lights: lit when someone waiting here wants that direction
+            var waitingHere = this.floorAt(f);
+            var hasUp = waitingHere.some(function (j) { return j.direction === 1; });
+            var hasDown = waitingHere.some(function (j) { return j.direction === -1; });
+            var sigX = LABEL_W + SIGNAL_W / 2;
+            drawArrow(ctx, sigX, fy - 5, 4, true, hasUp ? this.meta.color : '#e2e2e2', hasUp);
+            drawArrow(ctx, sigX, fy + 5, 4, false, hasDown ? this.meta.color : '#e2e2e2', hasDown);
+        }
+
+        // waiting passengers, as little stick figures
+        var activeBoardIds = {};
+        this.walkers.forEach(function (w) { if (w.kind === 'board') activeBoardIds[w.jobId] = true; });
+        for (f = 1; f <= FLOORS; f++) {
+            var jobs = this.floorAt(f);
+            var cy = floorCenterY(f);
+            var n = Math.min(jobs.length, MAX_FIGURES);
+            var x = HALL_X0 + 12;
+            var step = Math.max(11, 17 * this.figScale);
+            for (var i = 0; i < n; i++) {
+                drawPerson(ctx, x, cy, this.figScale, '#aaa');
+                ctx.fillStyle = '#888';
+                ctx.font = '8px "Crimson Text", serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(String(jobs[i].dest), x + 6, cy - 12 * this.figScale);
+                x += step;
+            }
+            if (jobs.length > MAX_FIGURES) {
+                ctx.textAlign = 'left';
+                ctx.fillStyle = '#999';
+                ctx.font = '10px "Crimson Text", serif';
+                ctx.fillText('+' + (jobs.length - MAX_FIGURES), x, cy + 3);
+            }
+        }
+        ctx.textAlign = 'left';
+
+        // cable
+        var cx = SHAFT_X0 + SHAFT_W / 2;
+        var cyCar = posToY(this.elevator.pos);
+        var carW = SHAFT_W - 10, carH = FLOOR_H - 8;
+        ctx.strokeStyle = '#ccc';
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(cx, 0);
+        ctx.lineTo(cx, cyCar - carH / 2);
+        ctx.stroke();
+        ctx.fillStyle = '#bbb';
+        ctx.fillRect(cx - 4, cyCar - carH / 2 - 2, 8, 4);
+
+        // elevator car
+        var dwelling = this.elevator.dwellUntil > this.simTime;
+        if (dwelling) {
+            ctx.fillStyle = this.meta.color + '33';
+            roundRect(ctx, cx - carW / 2 - 4, cyCar - carH / 2 - 4, carW + 8, carH + 8, 6);
+            ctx.fill();
+        }
+        ctx.fillStyle = this.meta.color + '1a';
+        ctx.strokeStyle = this.meta.color;
+        ctx.lineWidth = 2;
+        roundRect(ctx, cx - carW / 2, cyCar - carH / 2, carW, carH, 4);
+        ctx.fill();
+        ctx.stroke();
+        // door seam
+        ctx.strokeStyle = this.meta.color + '55';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(cx, cyCar - carH / 2 + 2);
+        ctx.lineTo(cx, cyCar + carH / 2 - 2);
+        ctx.stroke();
+
+        // passengers riding, excluding anyone still mid-walk into the car --
+        // scale and spacing both shrink together so a full car still fits.
+        var pax = this.elevator.passengers.filter(function (p) { return !activeBoardIds[p.id]; });
+        var maxSpan = carW - 8;
+        var spacing = Math.min(7 * this.figScale, maxSpan / Math.max(1, pax.length));
+        var boardedScale = Math.min(0.5 * this.figScale, spacing / 8);
+        var startX = cx - ((pax.length - 1) * spacing) / 2;
+        for (i = 0; i < pax.length; i++) {
+            drawPerson(ctx, startX + i * spacing, cyCar, boardedScale, this.meta.color);
+        }
+
+        // anyone currently walking through the doors, in either direction
+        var self = this;
+        this.walkers.forEach(function (w) {
+            var t = Math.min(1, (self.simTime - w.start) / WALK_DURATION);
+            var x = w.from.x + (w.to.x - w.from.x) * t;
+            var y = w.from.y + (w.to.y - w.from.y) * t;
+            var scale = w.kind === 'board'
+                ? (self.figScale - (self.figScale - boardedScale) * t)
+                : (boardedScale + (self.figScale - boardedScale) * t);
+            drawPerson(ctx, x, y, scale, self.meta.color);
+        });
+    };
+
+    // ---- app: wires the toggle chips + buttons to one, two, or all Simulations ----
+    function ElevatorApp(root) {
+        this.root = root;
+        this.toggle = root.querySelector('#algoToggle');
+        this.panelsEl = root.querySelector('#simPanels');
+        this.playBtn = root.querySelector('#simPlayPause');
+        this.resetBtn = root.querySelector('#simReset');
+        this.floorsInput = root.querySelector('#simFloors');
+        this.floorsValueEl = root.querySelector('#simFloorsValue');
+        this.rateInput = root.querySelector('#simRate');
+        this.rateValueEl = root.querySelector('#simRateValue');
+        this.selected = ALGO_ORDER.slice();
+        this.running = true;
+        this.visible = true;
+        this.lastT = null;
+        this.sims = [];
+        this.bindControls();
+        this.rebuild();
+        this.observeVisibility();
+        requestAnimationFrame(this.loop.bind(this));
+    }
+
+    ElevatorApp.prototype.bindControls = function () {
+        var self = this;
+        Array.prototype.forEach.call(this.toggle.querySelectorAll('.sim-chip'), function (chip) {
+            chip.addEventListener('click', function () {
+                var key = chip.dataset.algo;
+                var idx = self.selected.indexOf(key);
+                if (idx !== -1) {
+                    if (self.selected.length > 1) self.selected.splice(idx, 1);
+                } else {
+                    self.selected.push(key);
+                    if (self.selected.length > ALGO_ORDER.length) self.selected.shift();
+                }
+                self.rebuild();
+            });
+        });
+        this.playBtn.addEventListener('click', function () {
+            self.running = !self.running;
+            self.playBtn.textContent = self.running ? '❚❚ Pause' : '▶ Play';
+        });
+        this.resetBtn.addEventListener('click', function () { self.rebuild(); });
+        this.floorsInput.addEventListener('input', function () {
+            var n = parseInt(self.floorsInput.value, 10);
+            self.floorsValueEl.textContent = n;
+            FLOORS = n;
+            self.rebuild();
+        });
+        this.rateInput.addEventListener('input', function () {
+            var perMin = parseFloat(self.rateInput.value);
+            self.rateValueEl.textContent = perMin;
+            ARRIVAL_RATE = perMin / 60;
+            self.rebuild();
+        });
+    };
+
+    ElevatorApp.prototype.updateChipStates = function () {
+        var self = this;
+        Array.prototype.forEach.call(this.toggle.querySelectorAll('.sim-chip'), function (chip) {
+            chip.classList.toggle('active', self.selected.indexOf(chip.dataset.algo) !== -1);
+        });
+    };
+
+    ElevatorApp.prototype.rebuild = function () {
+        var self = this;
+        FLOOR_H = computeFloorH();
+        this.panelsEl.innerHTML = '';
+        this.sims = [];
+        var seed = (Date.now() ^ (Math.random() * 0xffffffff)) | 0;
+        var schedule = makeSchedule(seed);
+        var ordered = ALGO_ORDER.filter(function (k) { return self.selected.indexOf(k) !== -1; });
+        ordered.forEach(function (key) {
+            var meta = ALGOS[key];
+            var panel = document.createElement('div');
+            panel.className = 'sim-panel';
+            panel.style.color = meta.color;
+            panel.innerHTML =
+                '<div class="sim-panel-header">' +
+                    '<span class="sim-panel-title">' + meta.label + '</span>' +
+                    '<span class="sim-panel-stats">Delivered: 0 &nbsp;·&nbsp; Avg wait: —</span>' +
+                '</div>' +
+                '<canvas class="sim-canvas"></canvas>' +
+                '<div class="sim-dropoff">' +
+                    '<div class="sim-dropoff-label">Requested floors:</div>' +
+                    '<div class="sim-dropoff-pills"></div>' +
+                '</div>';
+            self.panelsEl.appendChild(panel);
+            var canvas = panel.querySelector('canvas');
+            var sim = new Simulation(key, schedule, canvas);
+            sim.statsEl = panel.querySelector('.sim-panel-stats');
+            sim.dropoffEl = panel.querySelector('.sim-dropoff-pills');
+            sim.lastDestsKey = '';
+            self.sims.push(sim);
+        });
+        this.lastT = null;
+        this.updateChipStates();
+    };
+
+    ElevatorApp.prototype.observeVisibility = function () {
+        var self = this;
+        if (!('IntersectionObserver' in window)) return;
+        var io = new IntersectionObserver(function (entries) {
+            self.visible = entries[0].isIntersecting;
+        }, { threshold: 0.05 });
+        io.observe(this.root);
+    };
+
+    ElevatorApp.prototype.loop = function (t) {
+        if (this.lastT === null) this.lastT = t;
+        var dt = Math.min((t - this.lastT) / 1000, 0.1);
+        this.lastT = t;
+        if (this.running && this.visible) {
+            this.sims.forEach(function (sim) { sim.step(dt); });
+        }
+        this.sims.forEach(function (sim) { sim.draw(); });
+
+        // Highlight whoever's winning on each metric -- only meaningful
+        // once there's something to compare.
+        var deliveredMedals = {}, waitMedals = {};
+        if (this.sims.length >= 2) {
+            deliveredMedals = topSims(this.sims, function (s) { return s.delivered; }, false);
+            var withDeliveries = this.sims.filter(function (s) { return s.delivered > 0; });
+            if (withDeliveries.length) {
+                waitMedals = topSims(withDeliveries, function (s) { return s.totalWait / s.delivered; }, true);
+            }
+        }
+
+        this.sims.forEach(function (sim) {
+            var waitStr = sim.delivered ? (sim.totalWait / sim.delivered).toFixed(1) + 's' : '—';
+            var deliveredPhrase = 'Delivered: ' + sim.delivered;
+            var waitPhrase = 'Avg wait: ' + waitStr;
+            var dMedal = deliveredMedals[sim.algoKey], wMedal = waitMedals[sim.algoKey];
+            if (dMedal) {
+                deliveredPhrase = '<span class="stat-medal stat-' + dMedal + '">' + deliveredPhrase + '</span>';
+            }
+            if (wMedal) {
+                waitPhrase = '<span class="stat-medal stat-' + wMedal + '">' + waitPhrase + '</span>';
+            }
+            sim.statsEl.innerHTML = deliveredPhrase + ' &nbsp;·&nbsp; ' + waitPhrase;
+
+            var dests = sim.currentDestinations();
+            var key = dests.join(',');
+            if (key !== sim.lastDestsKey) {
+                sim.lastDestsKey = key;
+                sim.dropoffEl.innerHTML = dests.map(function (d) {
+                    return '<span class="sim-dropoff-pill" style="background:' + sim.meta.color + '">' + d + '</span>';
+                }).join('');
+            }
+        });
+        requestAnimationFrame(this.loop.bind(this));
+    };
+
+    document.addEventListener('DOMContentLoaded', function () {
+        var root = document.getElementById('elevatorSim');
+        if (root) new ElevatorApp(root);
+    });
+})();
+</script>
 
 <!-- <footer>[1] A finance aside: this is fundamentally why diversification in finance is a good idea!<br>
         [2] A simple fact about the mixture is that its density is the weighted average of the densities of the original random variables! <br>

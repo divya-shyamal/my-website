@@ -212,3 +212,367 @@ footer {
     color: #E8A0BF;
     font-size: 0.85em;
 }
+/* --- Elevator simulation (blog83126.html) --- */
+
+.sim-figure {
+    margin: 2.5em 0;
+}
+
+.sim-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.sim-toggle-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.sim-chip {
+    font-family: 'Crimson Text', serif;
+    font-size: 0.95em;
+    padding: 7px 14px;
+    border-radius: 999px;
+    border: 1.5px solid var(--chip-color, #ccc);
+    background: #fff;
+    color: var(--chip-color, #333);
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.sim-chip.active {
+    background: var(--chip-color, #ccc);
+    color: #fff;
+}
+
+.sim-chip:hover {
+    filter: brightness(0.95);
+}
+
+.sim-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.sim-btn {
+    font-family: 'Crimson Text', serif;
+    font-size: 0.9em;
+    padding: 7px 14px;
+    border-radius: 6px;
+    border: 1px solid #ddd;
+    background: #fafafa;
+    color: #555;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.sim-btn:hover {
+    background: #f0f0f0;
+}
+
+.sim-floors-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.sim-floors-label {
+    font-size: 0.9em;
+    color: #666;
+    white-space: nowrap;
+}
+
+.sim-floors-slider {
+    flex: 1 1 auto;
+    max-width: 220px;
+    accent-color: #C75B8C;
+}
+
+.sim-panels {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.sim-panel {
+    flex: 1 1 260px;
+    background: #ffffff;
+    border-radius: 8px;
+    padding: 14px;
+    box-sizing: border-box;
+    min-width: 0;
+}
+
+.sim-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    margin-bottom: 8px;
+    border-bottom: 2px solid currentColor;
+    padding-bottom: 6px;
+}
+
+.sim-panel-title {
+    font-weight: bold;
+    font-size: 1em;
+}
+
+.sim-panel-stats {
+    font-size: 0.82em;
+    color: #666;
+    font-variant-numeric: tabular-nums;
+}
+
+.stat-medal {
+    display: inline-block;
+    font-weight: bold;
+    padding: 1px 7px;
+    border-radius: 999px;
+    animation: statGlow 1.8s ease-in-out infinite;
+}
+
+.stat-gold {
+    background: #FFF3D2;
+    color: #B8860B;
+}
+
+@keyframes statGlow {
+    0%, 100% { box-shadow: 0 0 0 rgba(184, 134, 11, 0); }
+    50% { box-shadow: 0 0 7px rgba(184, 134, 11, 0.6); }
+}
+
+.sim-canvas {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+.sim-dropoff {
+    margin-top: 10px;
+    font-size: 0.78em;
+    color: #888;
+}
+
+.sim-dropoff-label {
+    margin-bottom: 5px;
+}
+
+.sim-dropoff-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.sim-dropoff-pill {
+    display: inline-block;
+    min-width: 8px;
+    text-align: center;
+    padding: 1px 7px;
+    border-radius: 999px;
+    color: #fff;
+    font-size: 0.92em;
+}
+
+.sim-figure figcaption {
+    font-size: 0.75em;
+    color: #666;
+    margin-top: 12px;
+    line-height: 1.4;
+    text-align: center;
+}
+
+@media (max-width: 640px) {
+    .sim-panels {
+        flex-direction: column;
+    }
+}
+
+/* --- Attention illustration (blog90226.html) --- */
+
+.attn-figure {
+    margin: 2.5em 0;
+}
+
+.attn-canvas-box {
+    background: #ffffff;
+    border-radius: 8px;
+    padding: 20px 16px 12px;
+    box-sizing: border-box;
+}
+
+.attn-svg {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+.attn-svg text {
+    font-family: 'Crimson Text', serif;
+}
+
+.attn-svg .header-text {
+    font-size: 11px;
+    fill: #999;
+}
+
+.attn-svg .cell-text {
+    font-size: 12.5px;
+    fill: #333;
+}
+
+.attn-svg .row-line {
+    stroke: #eee;
+    stroke-width: 1;
+}
+
+.attn-svg .query-row-line {
+    stroke: #C75B8C;
+    stroke-width: 1.2;
+    stroke-dasharray: 3 3;
+}
+
+.attn-svg .query-label {
+    font-style: italic;
+    fill: #C75B8C;
+}
+
+.attn-svg .outcome-mark {
+    fill: #aaa;
+    transition: opacity 0.45s ease;
+}
+
+.attn-svg.stage-4 .outcome-mark {
+    opacity: 0;
+}
+
+.attn-svg .outcome-predicted {
+    fill: #C75B8C;
+    font-weight: bold;
+}
+
+.attn-svg .connector {
+    stroke: #ccc;
+    stroke-width: 1;
+}
+
+.attn-svg .emb-cell {
+    fill: #C75B8C;
+}
+
+.attn-svg .arc-path {
+    fill: none;
+    stroke: #C75B8C;
+}
+
+.attn-svg .weight-label {
+    font-size: 11px;
+    fill: #C75B8C;
+}
+
+.attn-svg .outcome-highlight {
+    fill: #C75B8C;
+}
+
+.attn-svg [data-layer] {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.45s ease;
+}
+
+.attn-svg.stage-2 [data-layer="embeddings"],
+.attn-svg.stage-3 [data-layer="embeddings"],
+.attn-svg.stage-4 [data-layer="embeddings"] {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.attn-svg.stage-3 [data-layer="arcs"],
+.attn-svg.stage-4 [data-layer="arcs"] {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.attn-svg.stage-4 [data-layer="arcs"] {
+    opacity: 0.45;
+}
+
+.attn-svg.stage-4 [data-layer="combine"] {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.attn-stepper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin: 16px 0 6px;
+}
+
+.attn-dot {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 1.5px solid #ddd;
+    background: #fff;
+    color: #999;
+    font-size: 0.8em;
+    font-family: 'Crimson Text', serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    padding: 0;
+}
+
+.attn-dot.done {
+    background: #F9D5E5;
+    border-color: #f3dfe7;
+    color: #C75B8C;
+}
+
+.attn-dot.current {
+    background: #C75B8C;
+    border-color: #C75B8C;
+    color: #fff;
+}
+
+.attn-dot-line {
+    width: 26px;
+    height: 1.5px;
+    background: #eee;
+}
+
+.attn-caption {
+    text-align: center;
+    font-size: 0.85em;
+    color: #555;
+    min-height: 2.6em;
+    margin: 6px 0 14px;
+    line-height: 1.4;
+    padding: 0 12px;
+}
+
+.attn-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 2px;
+}
+
+.attn-figure figcaption {
+    font-size: 0.75em;
+    color: #666;
+    margin-top: 12px;
+    line-height: 1.4;
+    text-align: center;
+}
