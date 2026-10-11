@@ -97,13 +97,17 @@
         var RING_GROWTH = 37;
         var MIN_NEIGHBOR_R = 14, MAX_NEIGHBOR_R = 32;
         var MIN_SIZE = 420;
-        var MIN_GAP_PX = 37.8;     // ~1cm at 96dpi, measured at the canvas's actual rendered width
+        var MIN_GAP_PX = 113.4;    // ~3cm at 96dpi, measured at the canvas's actual rendered width
         var SEARCH_RESULT_LIMIT = 40;
 
         var TRACKS = null, QUERIES = null;
         var currentIndex = 0;
         var artCache = {};
         var artClipCounter = 0;
+        var ART_STORAGE_PREFIX = 'bubbleArt:';
+        var ART_DISPATCH_MS = 90;   // stagger request starts (~11/sec max) to stay well under Spotify's rate limit
+        var artQueue = [];
+        var artDispatching = false;
 
         var svgEl, playerEl, detailEl, detailIframeEl, detailAttrsEl,
             regenBtn, searchToggleBtn, searchBoxEl, searchInputEl, searchResultsEl,
@@ -111,15 +115,72 @@
 
         function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
 
-        function fetchArt(id) {
-            if (artCache[id]) return artCache[id];
+        function getPersistedArt(id) {
+            try {
+                var v = localStorage.getItem(ART_STORAGE_PREFIX + id);
+                return v === null ? undefined : JSON.parse(v);
+            } catch (e) { return undefined; }
+        }
+
+        function setPersistedArt(id, url) {
+            try { localStorage.setItem(ART_STORAGE_PREFIX + id, JSON.stringify(url)); } catch (e) { /* ignore (quota, privacy mode) */ }
+        }
+
+        function pumpArtQueue() {
+            if (artDispatching) return;
+            artDispatching = true;
+            (function next() {
+                if (artQueue.length === 0) { artDispatching = false; return; }
+                (artQueue.shift())();
+                setTimeout(next, ART_DISPATCH_MS);
+            })();
+        }
+
+        function enqueueArtFetch(taskFn) {
+            return new Promise(function (resolve) {
+                artQueue.push(function () { taskFn().then(resolve); });
+                pumpArtQueue();
+            });
+        }
+
+        function fetchArtOnce(id, attempt) {
             var url = 'https://open.spotify.com/oembed?url=' + encodeURIComponent('https://open.spotify.com/track/' + id);
-            var p = fetch(url).then(function (r) {
-                if (!r.ok) throw new Error('bad response');
+            return fetch(url).then(function (r) {
+                if (r.status === 429 && attempt < 3) {
+                    var delay = 700 * Math.pow(2, attempt);
+                    return new Promise(function (res) { setTimeout(res, delay); })
+                        .then(function () { return fetchArtOnce(id, attempt + 1); });
+                }
+                if (!r.ok) throw new Error('bad response ' + r.status);
                 return r.json();
             }).then(function (data) {
                 return (data && data.thumbnail_url) ? data.thumbnail_url : null;
-            }).catch(function () { return null; });
+            });
+        }
+
+        // Caches successful lookups in localStorage forever (so a track's art
+        // is fetched at most once per browser, ever). Failures (including a
+        // 429 that persists through the retries above) are deliberately NOT
+        // cached, in memory or on disk, so a later regenerate/search attempt
+        // can retry once the rate limit has cleared instead of being stuck
+        // with a permanently-missing bubble.
+        function fetchArt(id) {
+            if (artCache[id]) return artCache[id];
+            var persisted = getPersistedArt(id);
+            if (persisted !== undefined) {
+                var resolved = Promise.resolve(persisted);
+                artCache[id] = resolved;
+                return resolved;
+            }
+            var p = enqueueArtFetch(function () { return fetchArtOnce(id, 0); })
+                .then(function (url) {
+                    setPersistedArt(id, url);
+                    return url;
+                })
+                .catch(function () {
+                    delete artCache[id];
+                    return null;
+                });
             artCache[id] = p;
             return p;
         }

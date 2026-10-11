@@ -553,17 +553,18 @@ footer {
     display: flex;
     flex-wrap: wrap;
     gap: 10px;
-    margin-bottom: 14px;
+    margin-bottom: 10px;
 }
 
 .bubble-loading {
     color: #888;
     font-size: 0.9em;
-    margin-bottom: 14px;
+    margin-bottom: 10px;
 }
 
 .bubble-query-player {
-    margin-bottom: 14px;
+    max-width: 360px;
+    margin: 0 auto 8px;
     border-radius: 12px;
     overflow: hidden;
     line-height: 0;
@@ -582,6 +583,12 @@ footer {
 .bubble-center,
 .bubble-neighbor {
     cursor: pointer;
+    outline: none;
+}
+
+.bubble-center:focus,
+.bubble-neighbor:focus {
+    outline: none;
 }
 
 .bubble-center-ring {
@@ -596,6 +603,10 @@ footer {
     stroke-width: 4.5;
 }
 
+.bubble-center:focus {
+    filter: drop-shadow(0 0 6px rgba(199, 91, 140, 0.85));
+}
+
 .bubble-neighbor-ring {
     fill: none;
     stroke: #4A6FC7;
@@ -606,6 +617,10 @@ footer {
 .bubble-neighbor:hover .bubble-neighbor-ring,
 .bubble-neighbor:focus .bubble-neighbor-ring {
     stroke-width: 3.5;
+}
+
+.bubble-neighbor:focus {
+    filter: drop-shadow(0 0 6px rgba(74, 111, 199, 0.85));
 }
 
 .bubble-search {
@@ -698,12 +713,12 @@ footer {
 }
 
 .bubble-detail {
-    margin-top: 16px;
+    margin-top: 8px;
     display: flex;
-    gap: 20px;
+    gap: 16px;
     background: #ffffff;
     border-radius: 8px;
-    padding: 16px 20px;
+    padding: 12px 16px;
     box-sizing: border-box;
 }
 
