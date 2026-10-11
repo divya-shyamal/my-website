@@ -927,3 +927,37 @@ footer {
 .overview-node circle.bubble-neighbor-ring {
     cursor: pointer;
 }
+
+/* --- Artist graph tab (blog90226.html) --- */
+
+.artist-query-embed {
+    max-width: 360px;
+    margin: 0 auto 8px;
+    border-radius: 12px;
+    overflow: hidden;
+    line-height: 0;
+}
+
+.artist-detail-body {
+    width: 100%;
+}
+
+.artist-detail-tracks-label {
+    font-size: 0.82em;
+    color: #888;
+    margin: 10px 0 6px;
+}
+
+.artist-detail-tracks {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.artist-detail-tracks iframe {
+    border-radius: 8px;
+}
+
+#artistDetail {
+    align-items: flex-start;
+}

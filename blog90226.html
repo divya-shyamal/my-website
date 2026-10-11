@@ -24,7 +24,7 @@
 
     <div id="protectedContent" style="display: none;">
     <header>
-        <h1>On tabular foundation models</h1>
+        <h1>A novel tabular-foundation-model-based algorithm</h1>
     </header>
 
     <main>
@@ -50,14 +50,17 @@
                 <li><strong>return</strong> \(\alpha_{h^\ast}(\cdot,\, x)\).</li>
             </ol>
         </div>
-        <p>In my experiments, I found that these weights this soft retrieval was quite good - the kernel regression estimate that resulted from it was better than LGBM in some cases (in particular the example below), and very predictive.</p>
+        <p>In my experiments, I found that these weights this soft retrieval was quite good (details to be added) - the kernel regression estimate that resulted from it was better than LGBM in some cases (in particular the example below), and was very predictive.</p>
         <p>Here, we demonstrate this algorithm on a Spotify dataset, where the goal is to predict the popularity of a song. Our TFM of choice is TabICLv2. We found that the average <a href="https://en.wikipedia.org/wiki/R%C3%A9nyi_entropy#Special_cases" target="_blank" rel="noopener">IPR</a> was \(11.86\) (with a context size of \(5000\)), showing that the TFM identifies incredibly tight neighborhoods. This phenomenon is not particular to TabICLv2.</p>
 
-        <p>We also try this on a financial dataset of 515 companies, where we predict valuation multiple. (I cheated a bit here, I had Claude choose a target and train a LGBM model much better than baseline. I then used the feature engineering it produced for TabICLv2). Since the dataset was very small, for each point we give the rest 514 points as context, allowing us to create a full graph across the companies.</p>
+        <p>We also try this on a financial dataset of 515 companies, where we predict valuation multiple. (I cheated a bit here, I had Claude choose a target and train a LGBM model much better than baseline. I then used the feature engineering it produced for TabICLv2). Since the dataset was very small, for each point we give the rest 514 points as context, allowing us to create a full graph across the companies. We found that the average IPR was \(27.60\) (with a context size of \(514\)), again showing that the TFM identifies incredibly tight neighborhoods.</p>
+
+        <p>I couldn't get enough of trying this on various datasets. The last is a personalized one, built from my Spotify data. It is a dataset on artists and the target is how much I like them. There is more interesting feature extraction and target construction here, including the use of image and text embedding models, which I will add in detail at some point.</p>
 
         <div class="tab-bar">
             <button class="tab-btn active" id="tabBtnMusic" type="button">Music</button>
             <button class="tab-btn" id="tabBtnFinance" type="button">Finance</button>
+            <button class="tab-btn" id="tabBtnArtists" type="button">Artists</button>
         </div>
 
         <div class="tab-panel" id="tabPanelMusic">
@@ -104,6 +107,27 @@
                 <div class="bubble-search-results" id="financeSearchResults"></div>
             </div>
             <div class="bubble-detail" id="financeDetail" style="display:none"></div>
+        </figure>
+        </div>
+
+        <div class="tab-panel" id="tabPanelArtists" style="display:none">
+        <figure class="bubble-figure" id="artistDiagram">
+            <div class="bubble-controls">
+                <button class="sim-btn" id="artistRegenerate" type="button">&#8635; Regenerate</button>
+                <button class="sim-btn" id="artistBack" type="button">&larr; Back</button>
+                <button class="sim-btn" id="artistSearchToggle" type="button">Search</button>
+                <button class="sim-btn" id="artistZoomOut" type="button">Zoom out (see all 1605)</button>
+            </div>
+            <div class="bubble-loading" id="artistLoading">Loading artist data&hellip;</div>
+            <div class="artist-query-embed" id="artistQueryEmbed"></div>
+            <div class="bubble-canvas-box">
+                <svg class="bubble-svg" id="artistSvg" viewBox="0 0 420 420" xmlns="http://www.w3.org/2000/svg"></svg>
+            </div>
+            <div class="bubble-search" id="artistSearch" style="display:none">
+                <input type="text" class="bubble-search-input" id="artistSearchInput" placeholder="Search any of my 1,605 liked artists&hellip;">
+                <div class="bubble-search-results" id="artistSearchResults"></div>
+            </div>
+            <div class="bubble-detail" id="artistDetail" style="display:none"></div>
         </figure>
         </div>
 
@@ -495,29 +519,31 @@
     <script>
     (function () {
         'use strict';
-        var musicBtn = document.getElementById('tabBtnMusic');
-        var financeBtn = document.getElementById('tabBtnFinance');
-        var musicPanel = document.getElementById('tabPanelMusic');
-        var financePanel = document.getElementById('tabPanelFinance');
-        if (!musicBtn || !financeBtn) return;
+        var tabs = [
+            { btn: 'tabBtnMusic', panel: 'tabPanelMusic', initFn: null },
+            { btn: 'tabBtnFinance', panel: 'tabPanelFinance', initFn: 'initFinanceGraph' },
+            { btn: 'tabBtnArtists', panel: 'tabPanelArtists', initFn: 'initArtistGraph' },
+        ].map(function (t) {
+            return {
+                btn: document.getElementById(t.btn),
+                panel: document.getElementById(t.panel),
+                initFn: t.initFn,
+                inited: false,
+            };
+        }).filter(function (t) { return t.btn && t.panel; });
 
-        var financeInited = false;
-
-        musicBtn.addEventListener('click', function () {
-            musicBtn.classList.add('active');
-            financeBtn.classList.remove('active');
-            musicPanel.style.display = '';
-            financePanel.style.display = 'none';
-        });
-        financeBtn.addEventListener('click', function () {
-            financeBtn.classList.add('active');
-            musicBtn.classList.remove('active');
-            financePanel.style.display = '';
-            musicPanel.style.display = 'none';
-            if (!financeInited && window.initFinanceGraph) {
-                financeInited = true;
-                window.initFinanceGraph();
-            }
+        tabs.forEach(function (tab) {
+            tab.btn.addEventListener('click', function () {
+                tabs.forEach(function (other) {
+                    var active = other === tab;
+                    other.btn.classList.toggle('active', active);
+                    other.panel.style.display = active ? '' : 'none';
+                });
+                if (!tab.inited && tab.initFn && window[tab.initFn]) {
+                    tab.inited = true;
+                    window[tab.initFn]();
+                }
+            });
         });
     })();
     </script>
@@ -1012,6 +1038,466 @@
         }
 
         window.initFinanceGraph = init;
+    })();
+    </script>
+
+    <script>
+    (function () {
+        'use strict';
+
+        var SVG_NS = 'http://www.w3.org/2000/svg';
+        var DATA_URL = 'artists_graph.json';
+
+        var GOLDEN_ANGLE = 137.50776405003785 * Math.PI / 180;
+        var CENTER_R = 40;
+        var RING_BASE_MIN = 66;
+        var RING_GROWTH = 27;
+        var MIN_NEIGHBOR_R = 10, MAX_NEIGHBOR_R = 24;
+        var MIN_SIZE = 320;
+        var MIN_GAP_PX = 62;
+        var SEARCH_RESULT_LIMIT = 40;
+
+        var OVERVIEW_MIN_R = 2.5, OVERVIEW_MAX_R = 10;
+        var OVERVIEW_RING_GROWTH = 11.5;
+        var OVERVIEW_RING_BASE = 22;
+
+        var ARTISTS = null, QUERIES = null;
+        var tickerToQueryIdx = null; // keyed by artist id, same role as finance's ticker map
+        var inDegMin = 0, inDegMax = 1;
+        var currentIndex = 0;
+        var lastZoomIndex = 0;
+        var zoomHistory = [];
+        var mode = 'zoom';
+
+        var svgEl, queryEmbedEl, detailEl, regenBtn, searchToggleBtn, zoomOutBtn, backBtn,
+            searchBoxEl, searchInputEl, searchResultsEl, canvasBoxEl, loadingEl;
+
+        function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+
+        function imageUrl(aid) {
+            return 'artist_images/' + encodeURIComponent(aid) + '.jpg';
+        }
+
+        function scaleLinear(val, minV, maxV, minR, maxR) {
+            if (maxV === minV) return (minR + maxR) / 2;
+            var t = (val - minV) / (maxV - minV);
+            return minR + t * (maxR - minR);
+        }
+
+        function computeLayout(n, containerPx) {
+            var ringBase = RING_BASE_MIN, size, maxR;
+            for (var iter = 0; iter < 60; iter++) {
+                maxR = ringBase + RING_GROWTH * Math.sqrt(Math.max(0, n - 1));
+                size = Math.max(MIN_SIZE, Math.ceil((maxR + MAX_NEIGHBOR_R + 24) * 2));
+                var scale = containerPx / size;
+                var edgeGapPx = (ringBase - CENTER_R - MAX_NEIGHBOR_R * 0.5) * scale;
+                if (edgeGapPx >= MIN_GAP_PX) break;
+                ringBase += 5;
+            }
+            return { size: size, cx: size / 2, cy: size / 2, ringBase: ringBase };
+        }
+
+        var bubbleClipCounter = 0;
+
+        function bubbleMarkup(cx, cy, r, ringClass, href) {
+            var clipId = 'art-clip-' + (bubbleClipCounter++);
+            var defs = '<clipPath id="' + clipId + '"><circle cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="' + r.toFixed(1) + '"/></clipPath>';
+            var img = '<circle cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="' + r.toFixed(1) + '" fill="#eee" style="pointer-events:none"/>' +
+                '<image href="' + esc(href) + '" x="' + (cx - r).toFixed(1) + '" y="' + (cy - r).toFixed(1) + '" width="' + (r * 2).toFixed(1) + '" height="' + (r * 2).toFixed(1) +
+                '" preserveAspectRatio="xMidYMid slice" clip-path="url(#' + clipId + ')" style="pointer-events:none" onerror="this.setAttribute(\'href\',\'\')"/>';
+            return { defs: defs, body: img +
+                '<circle class="' + ringClass + '" cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="' + r.toFixed(1) + '" style="pointer-events:none"/>' +
+                '<circle class="bubble-hit" cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="' + r.toFixed(1) + '" fill="transparent"/>' };
+        }
+
+        // --- shared directed-pair builder (same convention as finance:
+        // edge X->Y drawn when X is among Y's own top-IPR neighbors) ---
+        function buildPairs(idList, idSet) {
+            var pairMap = {};
+            idList.forEach(function (id) {
+                var qi = tickerToQueryIdx[id];
+                if (qi == null) return;
+                QUERIES[qi].neighbors.forEach(function (nb) {
+                    if (!idSet.hasOwnProperty(nb.id) || nb.id === id) return;
+                    var other = nb.id;
+                    var key = id < other ? id + '|' + other : other + '|' + id;
+                    var rec = pairMap[key] || (pairMap[key] = { a: id < other ? id : other, b: id < other ? other : id });
+                    if (id === rec.a) { rec.wBA = nb.weight; rec.wAB = nb.reverse_weight; rec.bToA = true; }
+                    else { rec.wAB = nb.weight; rec.wBA = nb.reverse_weight; rec.aToB = true; }
+                });
+            });
+            return Object.keys(pairMap).map(function (k) { return pairMap[k]; });
+        }
+
+        // --- zoom (local neighborhood) view ---
+
+        function buildZoomSvg(q) {
+            var neighbors = q.neighbors;
+            var containerPx = (canvasBoxEl && canvasBoxEl.clientWidth) || 700;
+            var layout = computeLayout(neighbors.length, containerPx);
+            var cx = layout.cx, cy = layout.cy, ringBase = layout.ringBase;
+
+            var positions = neighbors.map(function (n, i) {
+                var angle = i * GOLDEN_ANGLE;
+                var r = ringBase + RING_GROWTH * Math.sqrt(i);
+                return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
+            });
+
+            var nodeById = {};
+            nodeById[q.id] = { x: cx, y: cy, r: CENTER_R, isCenter: true };
+            neighbors.forEach(function (n, i) {
+                var p = positions[i];
+                var r = scaleLinear(ARTISTS[n.id].inDegree, inDegMin, inDegMax, MIN_NEIGHBOR_R, MAX_NEIGHBOR_R);
+                nodeById[n.id] = { x: p.x, y: p.y, r: r, isCenter: false };
+            });
+            var displayedIds = Object.keys(nodeById);
+            var pairs = buildPairs(displayedIds, nodeById);
+            var maxW = Math.max.apply(null, pairs.map(function (p) { return Math.max(p.wAB || 0, p.wBA || 0); }).concat([0.0001]));
+
+            var defs = ['<marker id="art-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#C75B8C"/></marker>'];
+            var edgeMarkup = [];
+            pairs.forEach(function (p, i) {
+                var a = nodeById[p.a], b = nodeById[p.b];
+                var w = Math.max(p.wAB || 0, p.wBA || 0);
+                var wNorm = w / maxW;
+                var strokeW = (0.5 + Math.sqrt(wNorm) * 1.6).toFixed(2);
+                var opacity = (0.10 + wNorm * 0.25).toFixed(2);
+                var markerAttrs = '';
+                if (p.aToB) markerAttrs += ' marker-end="url(#art-arrow)"';
+                if (p.bToA) markerAttrs += ' marker-start="url(#art-arrow)"';
+                edgeMarkup.push('<line class="bubble-edge-hit" x1="' + a.x.toFixed(1) + '" y1="' + a.y.toFixed(1) +
+                    '" x2="' + b.x.toFixed(1) + '" y2="' + b.y.toFixed(1) + '" data-edge-idx="' + i + '"/>');
+                edgeMarkup.push('<line class="bubble-edge" x1="' + a.x.toFixed(1) + '" y1="' + a.y.toFixed(1) +
+                    '" x2="' + b.x.toFixed(1) + '" y2="' + b.y.toFixed(1) + '" stroke-width="' + strokeW +
+                    '" stroke-opacity="' + opacity + '"' + markerAttrs + ' data-edge-idx="' + i + '"/>');
+            });
+
+            var body = [];
+            displayedIds.forEach(function (id) {
+                var node = nodeById[id];
+                var ringClass = node.isCenter ? 'bubble-center-ring' : 'bubble-neighbor-ring';
+                var groupClass = node.isCenter ? 'bubble-center' : 'bubble-neighbor';
+                var bm = bubbleMarkup(node.x, node.y, node.r, ringClass, imageUrl(id));
+                defs.push(bm.defs);
+                body.push('<g class="' + groupClass + '" data-artist-id="' + esc(id) + '" tabindex="0">' + bm.body + '</g>');
+            });
+
+            var markup = '<defs>' + defs.join('') + '</defs>' +
+                '<g class="bubble-edges">' + edgeMarkup.join('') + '</g>' + body.join('\n');
+            return { size: layout.size, markup: markup, pairs: pairs };
+        }
+
+        function wireZoomClicks(built) {
+            svgEl.querySelectorAll('.bubble-center, .bubble-neighbor').forEach(function (g) {
+                var aid = g.getAttribute('data-artist-id');
+                var isCenter = g.classList.contains('bubble-center');
+                var handler = function () {
+                    if (isCenter) {
+                        showNodeDetail(aid);
+                    } else {
+                        renderZoom(tickerToQueryIdx[aid]);
+                        showNodeDetail(aid);
+                    }
+                };
+                g.addEventListener('click', handler);
+                g.addEventListener('keydown', function (e) { if (e.key === 'Enter') handler(); });
+            });
+            svgEl.querySelectorAll('.bubble-edge-hit').forEach(function (hit) {
+                var idx = parseInt(hit.getAttribute('data-edge-idx'), 10);
+                var p = built.pairs[idx];
+                hit.addEventListener('click', function () { showEdgeDetail(p.a, p.b, p.wAB, p.wBA, p.aToB, p.bToA); });
+            });
+        }
+
+        // --- overview (all artists) ---
+
+        function buildOverviewSvg() {
+            var containerPx = (canvasBoxEl && canvasBoxEl.clientWidth) || 700;
+            var n = QUERIES.length;
+            var maxR = OVERVIEW_RING_BASE + OVERVIEW_RING_GROWTH * Math.sqrt(n);
+            var size = Math.ceil((maxR + OVERVIEW_MAX_R + 20) * 2);
+            var cx = size / 2, cy = size / 2;
+
+            var allIds = QUERIES.map(function (q) { return q.id; })
+                .sort(function (a, b) { return ARTISTS[b].inDegree - ARTISTS[a].inDegree; });
+            var nodeById = {};
+            allIds.forEach(function (id, i) {
+                var angle = i * GOLDEN_ANGLE;
+                var r0 = OVERVIEW_RING_BASE + OVERVIEW_RING_GROWTH * Math.sqrt(i);
+                var rad = scaleLinear(ARTISTS[id].inDegree, inDegMin, inDegMax, OVERVIEW_MIN_R, OVERVIEW_MAX_R);
+                nodeById[id] = { x: cx + r0 * Math.cos(angle), y: cy + r0 * Math.sin(angle), r: rad };
+            });
+
+            var pairs = buildPairs(allIds, nodeById);
+            var maxW = Math.max.apply(null, pairs.map(function (p) { return Math.max(p.wAB || 0, p.wBA || 0); }).concat([0.0001]));
+            var edgeMarkup = pairs.map(function (p) {
+                var a = nodeById[p.a], b = nodeById[p.b];
+                var w = Math.max(p.wAB || 0, p.wBA || 0);
+                var wNorm = w / maxW;
+                var strokeW = (0.3 + Math.sqrt(wNorm) * 1.0).toFixed(2);
+                var opacity = (0.04 + wNorm * 0.14).toFixed(2);
+                return '<line class="bubble-edge" x1="' + a.x.toFixed(1) + '" y1="' + a.y.toFixed(1) +
+                    '" x2="' + b.x.toFixed(1) + '" y2="' + b.y.toFixed(1) + '" stroke-width="' + strokeW + '" stroke-opacity="' + opacity + '"/>';
+            });
+
+            var body = [];
+            allIds.forEach(function (id) {
+                var node = nodeById[id];
+                body.push('<g class="bubble-neighbor overview-node" data-artist-id="' + esc(id) + '" tabindex="0">' +
+                    '<circle class="bubble-neighbor-ring" cx="' + node.x.toFixed(1) + '" cy="' + node.y.toFixed(1) + '" r="' + node.r.toFixed(1) + '"/>' +
+                    '<circle class="bubble-hit" cx="' + node.x.toFixed(1) + '" cy="' + node.y.toFixed(1) + '" r="' + Math.max(node.r, 6).toFixed(1) + '" fill="transparent"/>' +
+                    '</g>');
+            });
+            body.unshift('<g class="bubble-edges">' + edgeMarkup.join('') + '</g>');
+            return { size: Math.max(size, MIN_SIZE), markup: '<defs></defs>' + body.join('\n') };
+        }
+
+        function wireOverviewClicks() {
+            svgEl.querySelectorAll('.overview-node').forEach(function (g) {
+                var aid = g.getAttribute('data-artist-id');
+                var handler = function () {
+                    mode = 'zoom';
+                    if (zoomOutBtn) zoomOutBtn.textContent = 'Zoom out (see all 1605)';
+                    renderZoom(tickerToQueryIdx[aid]);
+                    showNodeDetail(aid);
+                };
+                g.addEventListener('click', handler);
+                g.addEventListener('keydown', function (e) { if (e.key === 'Enter') handler(); });
+            });
+        }
+
+        function renderOverview() {
+            hideDetail();
+            closeSearch();
+            queryEmbedEl.innerHTML = '<div class="finance-overview-note">All 1605 liked artists, sized by in-degree (how often they show up as someone else\'s top neighbor). Click one to zoom in.</div>';
+            var built = buildOverviewSvg();
+            svgEl.setAttribute('viewBox', '0 0 ' + built.size + ' ' + built.size);
+            svgEl.innerHTML = built.markup;
+            wireOverviewClicks();
+        }
+
+        function toggleOverview() {
+            if (mode === 'zoom') {
+                lastZoomIndex = currentIndex;
+                mode = 'overview';
+                zoomOutBtn.textContent = 'Exit overview';
+                renderOverview();
+            } else {
+                mode = 'zoom';
+                zoomOutBtn.textContent = 'Zoom out (see all 1605)';
+                renderZoom(lastZoomIndex);
+            }
+        }
+
+        // --- detail panel ---
+
+        function detailRow(label, value) {
+            return '<div class="bubble-detail-row"><span class="bubble-detail-label">' + label +
+                '</span><span class="bubble-detail-value">' + value + '</span></div>';
+        }
+
+        function renderQueryEmbed(aid) {
+            queryEmbedEl.innerHTML = '<iframe src="https://open.spotify.com/embed/artist/' + esc(aid) +
+                '" width="100%" height="152" frameborder="0" allow="encrypted-media" loading="lazy" title="Artist preview"></iframe>';
+        }
+
+        function showNodeDetail(aid) {
+            var a = ARTISTS[aid];
+            var html = '<div class="artist-detail-body">';
+            html += '<div class="bubble-detail-name">' + esc(a.name) + '</div>';
+            html += '<div class="bubble-detail-rows">' +
+                detailRow('Liked songs by them', a.liked_count) +
+                detailRow('Appearances in my playlists', a.playlist_count) +
+                detailRow('My long-term top-artist rank', a.top_artist_rank != null ? ('#' + a.top_artist_rank) : 'not in top 50') +
+                detailRow('Top-artist bonus', a.top_artist_bonus) +
+                '</div>';
+            html += '<div class="bubble-detail-target">How much I like them (combined score): ' + a.target.toFixed(0) +
+                ' &mdash; rank ' + a.rank + ' of ' + Object.keys(ARTISTS).length + '</div>';
+
+            if (a.liked_tracks && a.liked_tracks.length) {
+                html += '<div class="artist-detail-tracks-label">' +
+                    (a.n_liked_tracks_total > a.liked_tracks.length
+                        ? (a.liked_tracks.length + ' of ' + a.n_liked_tracks_total + ' liked songs by them:')
+                        : 'Liked songs by them:') + '</div>';
+                html += '<div class="artist-detail-tracks">';
+                a.liked_tracks.forEach(function (t) {
+                    html += '<iframe src="https://open.spotify.com/embed/track/' + esc(t.id) +
+                        '" width="100%" height="80" frameborder="0" allow="encrypted-media" loading="lazy" title="' + esc(t.name) + '"></iframe>';
+                });
+                html += '</div>';
+            }
+            html += '</div>';
+            detailEl.innerHTML = html;
+            detailEl.style.display = '';
+        }
+
+        function showEdgeDetail(idA, idB, wAB, wBA, aToB, bToA) {
+            var a = ARTISTS[idA], b = ARTISTS[idB];
+            var arrow = (aToB && bToA) ? '&harr;' : (aToB ? '&rarr;' : '&larr;');
+            var html = '<div class="finance-edge-detail">';
+            html += '<div class="bubble-detail-name">' + esc(a.name) + ' ' + arrow + ' ' + esc(b.name) + '</div>';
+            html += '<div class="bubble-detail-rows">' +
+                detailRow(esc(a.name) + ' &rarr; ' + esc(b.name), '\\(\\alpha = ' + wAB.toFixed(4) + '\\)') +
+                detailRow(esc(b.name) + ' &rarr; ' + esc(a.name), '\\(\\alpha = ' + wBA.toFixed(4) + '\\)') +
+                '</div>';
+            html += '</div>';
+            detailEl.innerHTML = html;
+            detailEl.style.display = '';
+            if (window.MathJax && window.MathJax.typesetPromise) {
+                window.MathJax.typesetPromise([detailEl]).catch(function () {});
+            }
+        }
+
+        function hideDetail() {
+            detailEl.style.display = 'none';
+            detailEl.innerHTML = '';
+        }
+
+        // --- search ---
+
+        function searchResultRow(aid, idx) {
+            var a = ARTISTS[aid];
+            return '<div class="bubble-list-row" data-qidx="' + idx + '" tabindex="0">' +
+                '<img class="bubble-list-art" src="' + esc(imageUrl(aid)) + '" alt="" onerror="this.style.visibility=\'hidden\'">' +
+                '<div class="bubble-list-info">' +
+                    '<div class="bubble-list-name">' + esc(a.name) + '</div>' +
+                    '<div class="bubble-list-artist">' + a.liked_count + ' liked songs</div>' +
+                '</div>' +
+                '<div class="bubble-list-pop">' + a.target.toFixed(0) + '</div>' +
+            '</div>';
+        }
+
+        function renderSearchResults() {
+            var q = searchInputEl.value.trim().toLowerCase();
+            if (!q) {
+                searchResultsEl.innerHTML = '<div class="bubble-search-empty">Type an artist name to search all 1,605 liked artists.</div>';
+                return;
+            }
+            var matches = [];
+            for (var i = 0; i < QUERIES.length; i++) {
+                var aid = QUERIES[i].id;
+                if (ARTISTS[aid].name.toLowerCase().indexOf(q) !== -1) {
+                    matches.push(i);
+                    if (matches.length >= 400) break;
+                }
+            }
+            matches.sort(function (a, b) { return ARTISTS[QUERIES[b].id].target - ARTISTS[QUERIES[a].id].target; });
+            matches = matches.slice(0, SEARCH_RESULT_LIMIT);
+            if (matches.length === 0) {
+                searchResultsEl.innerHTML = '<div class="bubble-search-empty">No matching artists.</div>';
+                return;
+            }
+            searchResultsEl.innerHTML = matches.map(function (idx) { return searchResultRow(QUERIES[idx].id, idx); }).join('');
+            searchResultsEl.querySelectorAll('.bubble-list-row').forEach(function (row) {
+                var idx = parseInt(row.getAttribute('data-qidx'), 10);
+                row.addEventListener('click', function () { selectQuery(idx); });
+                row.addEventListener('keydown', function (e) { if (e.key === 'Enter') selectQuery(idx); });
+            });
+        }
+
+        function closeSearch() {
+            searchBoxEl.style.display = 'none';
+            canvasBoxEl.style.display = '';
+            searchInputEl.value = '';
+            if (searchToggleBtn) searchToggleBtn.textContent = 'Search';
+        }
+
+        function toggleSearch() {
+            var isOpen = searchBoxEl.style.display !== 'none';
+            if (isOpen) {
+                closeSearch();
+            } else {
+                canvasBoxEl.style.display = 'none';
+                searchBoxEl.style.display = '';
+                searchToggleBtn.textContent = 'Show graph';
+                renderSearchResults();
+                searchInputEl.focus();
+            }
+        }
+
+        function selectQuery(idx) {
+            closeSearch();
+            mode = 'zoom';
+            zoomOutBtn.textContent = 'Zoom out (see all 1605)';
+            renderZoom(idx);
+        }
+
+        function updateBackBtn() {
+            if (!backBtn) return;
+            backBtn.disabled = zoomHistory.length === 0;
+            backBtn.style.opacity = zoomHistory.length === 0 ? '0.5' : '1';
+        }
+
+        function renderZoom(idx, fromHistory) {
+            if (mode === 'zoom' && currentIndex !== idx && !fromHistory) {
+                zoomHistory.push(currentIndex);
+                updateBackBtn();
+            }
+            currentIndex = idx;
+            mode = 'zoom';
+            var q = QUERIES[idx];
+            hideDetail();
+            renderQueryEmbed(q.id);
+            var built = buildZoomSvg(q);
+            svgEl.setAttribute('viewBox', '0 0 ' + built.size + ' ' + built.size);
+            svgEl.innerHTML = built.markup;
+            wireZoomClicks(built);
+        }
+
+        function goBack() {
+            if (zoomHistory.length === 0) return;
+            var idx = zoomHistory.pop();
+            updateBackBtn();
+            closeSearch();
+            renderZoom(idx, true);
+        }
+
+        function regenerate() {
+            if (!QUERIES || QUERIES.length < 2) return;
+            var next;
+            do { next = Math.floor(Math.random() * QUERIES.length); } while (next === currentIndex);
+            closeSearch();
+            renderZoom(next);
+        }
+
+        function init() {
+            svgEl = document.getElementById('artistSvg');
+            queryEmbedEl = document.getElementById('artistQueryEmbed');
+            canvasBoxEl = document.querySelector('#artistDiagram .bubble-canvas-box');
+            detailEl = document.getElementById('artistDetail');
+            regenBtn = document.getElementById('artistRegenerate');
+            searchToggleBtn = document.getElementById('artistSearchToggle');
+            zoomOutBtn = document.getElementById('artistZoomOut');
+            backBtn = document.getElementById('artistBack');
+            searchBoxEl = document.getElementById('artistSearch');
+            searchInputEl = document.getElementById('artistSearchInput');
+            searchResultsEl = document.getElementById('artistSearchResults');
+            loadingEl = document.getElementById('artistLoading');
+            if (!svgEl || !detailEl) return;
+
+            if (backBtn) backBtn.addEventListener('click', goBack);
+            updateBackBtn();
+            if (regenBtn) regenBtn.addEventListener('click', regenerate);
+            if (searchToggleBtn) searchToggleBtn.addEventListener('click', toggleSearch);
+            if (zoomOutBtn) zoomOutBtn.addEventListener('click', toggleOverview);
+            if (searchInputEl) searchInputEl.addEventListener('input', renderSearchResults);
+
+            fetch(DATA_URL).then(function (r) { return r.json(); }).then(function (data) {
+                ARTISTS = data.artists;
+                QUERIES = data.queries;
+                tickerToQueryIdx = {};
+                QUERIES.forEach(function (q, i) { tickerToQueryIdx[q.id] = i; });
+                var degs = Object.keys(ARTISTS).map(function (id) { return ARTISTS[id].inDegree; });
+                inDegMin = Math.min.apply(null, degs);
+                inDegMax = Math.max.apply(null, degs);
+                if (loadingEl) loadingEl.style.display = 'none';
+                renderZoom(Math.floor(Math.random() * QUERIES.length));
+            }).catch(function () {
+                if (loadingEl) loadingEl.textContent = 'Could not load artist data.';
+            });
+        }
+
+        window.initArtistGraph = init;
     })();
     </script>
 
