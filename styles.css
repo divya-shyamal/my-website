@@ -259,6 +259,10 @@ footer {
     gap: 8px;
 }
 
+.sim-btn:disabled {
+    cursor: not-allowed;
+}
+
 .sim-btn {
     font-family: 'Crimson Text', serif;
     font-size: 0.9em;
@@ -545,6 +549,36 @@ footer {
 
 /* --- Attention bubble chart (blog90226.html) --- */
 
+.tab-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+    border-bottom: 1px solid #f3dfe7;
+}
+
+.tab-btn {
+    font-family: 'Crimson Text', serif;
+    font-size: 1em;
+    padding: 8px 18px;
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: none;
+    color: #888;
+    cursor: pointer;
+    margin-bottom: -1px;
+    transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.tab-btn:hover {
+    color: #C75B8C;
+}
+
+.tab-btn.active {
+    color: #C75B8C;
+    border-bottom-color: #C75B8C;
+    font-weight: bold;
+}
+
 .bubble-figure {
     margin: 2em 0;
 }
@@ -778,4 +812,107 @@ footer {
     .bubble-detail {
         flex-direction: column;
     }
+}
+
+/* --- Finance graph tab (blog90226.html) --- */
+
+.finance-query-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    max-width: 420px;
+    margin: 0 auto 8px;
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 12px 16px;
+    box-sizing: border-box;
+}
+
+.finance-query-logo,
+.finance-detail-logo {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: #eee;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+.finance-detail-logo {
+    width: 64px;
+    height: 64px;
+}
+
+.finance-query-logo img,
+.finance-detail-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #ffffff;
+}
+
+.finance-query-info {
+    min-width: 0;
+}
+
+.fin-logo-img {
+    object-fit: contain !important;
+    background: #ffffff;
+}
+
+.finance-query-name {
+    font-weight: bold;
+}
+
+.finance-query-ticker {
+    font-weight: normal;
+    color: #888;
+    font-size: 0.85em;
+}
+
+.finance-query-sector {
+    font-size: 0.82em;
+    color: #888;
+}
+
+.bubble-edge {
+    stroke: #C75B8C;
+    fill: none;
+    pointer-events: none;
+    transition: stroke-opacity 0.15s ease;
+}
+
+.bubble-edge-hit {
+    stroke: transparent;
+    stroke-width: 10;
+    cursor: pointer;
+}
+
+.bubble-edge-hit:hover + .bubble-edge {
+    stroke-opacity: 0.8 !important;
+}
+
+.finance-detail-body {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+#financeDetail {
+    align-items: flex-start;
+}
+
+#financeDetail .finance-edge-detail {
+    width: 100%;
+}
+
+.finance-overview-note {
+    font-size: 0.85em;
+    color: #888;
+    text-align: center;
+    max-width: 480px;
+    margin: 0 auto 8px;
+}
+
+.overview-node circle.bubble-neighbor-ring {
+    cursor: pointer;
 }

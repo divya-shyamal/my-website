@@ -52,7 +52,14 @@
         </div>
         <p>In my experiments, I found that these weights this soft retrieval was quite good - the kernel regression estimate that resulted from it was better than LGBM in some cases (in particular the example below), and very predictive.</p>
         <p>Here, we demonstrate this algorithm on a Spotify dataset, where the goal is to predict the popularity of a song. Our TFM of choice is TabICLv2. We found that the average <a href="https://en.wikipedia.org/wiki/R%C3%A9nyi_entropy#Special_cases" target="_blank" rel="noopener">IPR</a> was \(11.86\) (with a context size of \(5000\)), showing that the TFM identifies incredibly tight neighborhoods. This phenomenon is not particular to TabICLv2.</p>
+        <p>We also demonstrate on a da</p>
 
+        <div class="tab-bar">
+            <button class="tab-btn active" id="tabBtnMusic" type="button">Music</button>
+            <button class="tab-btn" id="tabBtnFinance" type="button">Finance</button>
+        </div>
+
+        <div class="tab-panel" id="tabPanelMusic">
         <figure class="bubble-figure" id="bubbleDiagram">
             <div class="bubble-controls">
                 <button class="sim-btn bubble-regenerate" id="bubbleRegenerate" type="button">&#8635; Regenerate</button>
@@ -76,6 +83,28 @@
                 <div class="bubble-detail-attrs" id="bubbleDetailAttrs"></div>
             </div>
         </figure>
+        </div>
+
+        <div class="tab-panel" id="tabPanelFinance" style="display:none">
+        <figure class="bubble-figure" id="financeDiagram">
+            <div class="bubble-controls">
+                <button class="sim-btn" id="financeRegenerate" type="button">&#8635; Regenerate</button>
+                <button class="sim-btn" id="financeBack" type="button">&larr; Back</button>
+                <button class="sim-btn" id="financeSearchToggle" type="button">Search</button>
+                <button class="sim-btn" id="financeZoomOut" type="button">Zoom out (see all 515)</button>
+            </div>
+            <div class="bubble-loading" id="financeLoading">Loading company data&hellip;</div>
+            <div class="finance-query-card" id="financeQueryCard"></div>
+            <div class="bubble-canvas-box">
+                <svg class="bubble-svg" id="financeSvg" viewBox="0 0 420 420" xmlns="http://www.w3.org/2000/svg"></svg>
+            </div>
+            <div class="bubble-search" id="financeSearch" style="display:none">
+                <input type="text" class="bubble-search-input" id="financeSearchInput" placeholder="Search any of the 515 companies by name or ticker&hellip;">
+                <div class="bubble-search-results" id="financeSearchResults"></div>
+            </div>
+            <div class="bubble-detail" id="financeDetail" style="display:none"></div>
+        </figure>
+        </div>
 
     </main>
 
@@ -97,7 +126,7 @@
         var RING_GROWTH = 37;
         var MIN_NEIGHBOR_R = 14, MAX_NEIGHBOR_R = 32;
         var MIN_SIZE = 420;
-        var MIN_GAP_PX = 113.4;    // ~3cm at 96dpi, measured at the canvas's actual rendered width
+        var MIN_GAP_PX = 83.5;     // ~2.2cm at 96dpi, measured at the canvas's actual rendered width
         var SEARCH_RESULT_LIMIT = 40;
 
         var TRACKS = null, QUERIES = null;
@@ -218,12 +247,12 @@
         function buildBubbleSvg(q) {
             var neighbors = q.neighbors;
             var containerPx = (canvasBoxEl && canvasBoxEl.clientWidth) || 700;
-            var pops = neighbors.map(function (n) { return TRACKS[n.id].popularity; });
-            var minPop = Math.min.apply(null, pops), maxPop = Math.max.apply(null, pops);
+            var weightsAll = neighbors.map(function (n) { return n.weight; });
+            var minW2 = Math.min.apply(null, weightsAll), maxW2 = Math.max.apply(null, weightsAll);
             // neighbors are pre-sorted by attention weight, so index 0 is always
-            // the one placed nearest the query -- its own radius (which depends
-            // on its popularity, not its weight) has to be accounted for too.
-            var nearestR = neighbors.length > 0 ? scaleRadius(TRACKS[neighbors[0].id].popularity, minPop, maxPop) : 0;
+            // the one placed nearest the query AND (now) the biggest bubble --
+            // size and distance both track the same alpha value.
+            var nearestR = neighbors.length > 0 ? scaleRadius(neighbors[0].weight, minW2, maxW2) : 0;
             var layout = computeLayout(neighbors.length, containerPx, nearestR);
             var cx = layout.cx, cy = layout.cy, ringBase = layout.ringBase;
 
@@ -240,7 +269,7 @@
             var radii = [];
             neighbors.forEach(function (n, i) {
                 var p = positions[i];
-                var r = scaleRadius(TRACKS[n.id].popularity, minPop, maxPop);
+                var r = scaleRadius(n.weight, minW2, maxW2);
                 radii.push(r);
                 body.push('<g class="bubble-neighbor" data-kind="neighbor" data-idx="' + i + '" tabindex="0">' +
                     placeholderBubbleMarkup(p.x, p.y, r, 'bubble-neighbor-ring') + '</g>');
@@ -459,6 +488,523 @@
                 if (loadingEl) loadingEl.textContent = 'Could not load track data.';
             });
         });
+    })();
+    </script>
+
+    <script>
+    (function () {
+        'use strict';
+        var musicBtn = document.getElementById('tabBtnMusic');
+        var financeBtn = document.getElementById('tabBtnFinance');
+        var musicPanel = document.getElementById('tabPanelMusic');
+        var financePanel = document.getElementById('tabPanelFinance');
+        if (!musicBtn || !financeBtn) return;
+
+        var financeInited = false;
+
+        musicBtn.addEventListener('click', function () {
+            musicBtn.classList.add('active');
+            financeBtn.classList.remove('active');
+            musicPanel.style.display = '';
+            financePanel.style.display = 'none';
+        });
+        financeBtn.addEventListener('click', function () {
+            financeBtn.classList.add('active');
+            musicBtn.classList.remove('active');
+            financePanel.style.display = '';
+            musicPanel.style.display = 'none';
+            if (!financeInited && window.initFinanceGraph) {
+                financeInited = true;
+                window.initFinanceGraph();
+            }
+        });
+    })();
+    </script>
+
+    <script>
+    (function () {
+        'use strict';
+
+        var SVG_NS = 'http://www.w3.org/2000/svg';
+        var DATA_URL = 'companies_graph.json';
+
+        var GOLDEN_ANGLE = 137.50776405003785 * Math.PI / 180;
+        var CENTER_R = 54;
+        var RING_BASE_MIN = 90;
+        var RING_GROWTH = 37;
+        var MIN_NEIGHBOR_R = 14, MAX_NEIGHBOR_R = 32;
+        var MIN_SIZE = 420;
+        var MIN_GAP_PX = 83.5;
+        var SEARCH_RESULT_LIMIT = 40;
+
+        var OVERVIEW_MIN_R = 3, OVERVIEW_MAX_R = 13;
+        var OVERVIEW_RING_GROWTH = 15.5;
+        var OVERVIEW_RING_BASE = 30; // keeps the first few nodes from overlapping at the spiral's origin
+
+        var COMPANIES = null, QUERIES = null;
+        var tickerToQueryIdx = null;
+        var inDegMin = 0, inDegMax = 1;
+        var currentIndex = 0;
+        var lastZoomIndex = 0;
+        var zoomHistory = [];
+        var mode = 'zoom'; // 'zoom' | 'overview'
+
+        var svgEl, queryCardEl, detailEl, regenBtn, searchToggleBtn, zoomOutBtn, backBtn,
+            searchBoxEl, searchInputEl, searchResultsEl, canvasBoxEl, loadingEl;
+
+        function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+        function fmtMoney(v) {
+            if (v == null || isNaN(v)) return '—';
+            if (Math.abs(v) >= 1e12) return '$' + (v / 1e12).toFixed(2) + 'T';
+            if (Math.abs(v) >= 1e9) return '$' + (v / 1e9).toFixed(2) + 'B';
+            if (Math.abs(v) >= 1e6) return '$' + (v / 1e6).toFixed(1) + 'M';
+            return '$' + Math.round(v).toLocaleString();
+        }
+        function fmtPct(v) { return (v == null || isNaN(v)) ? '—' : (v * 100).toFixed(1) + '%'; }
+        function fmtInt(v) { return (v == null || isNaN(v)) ? '—' : Math.round(v).toLocaleString(); }
+
+        function logoUrl(ticker) {
+            var c = COMPANIES[ticker];
+            if (!c || !c.domain) return null;
+            return 'https://www.google.com/s2/favicons?domain=' + encodeURIComponent(c.domain) + '&sz=128';
+        }
+
+        function scaleLinear(val, minV, maxV, minR, maxR) {
+            if (maxV === minV) return (minR + maxR) / 2;
+            var t = (val - minV) / (maxV - minV);
+            return minR + t * (maxR - minR);
+        }
+
+        function computeLayout(n, containerPx) {
+            var ringBase = RING_BASE_MIN, size, maxR;
+            for (var iter = 0; iter < 60; iter++) {
+                maxR = ringBase + RING_GROWTH * Math.sqrt(Math.max(0, n - 1));
+                size = Math.max(MIN_SIZE, Math.ceil((maxR + MAX_NEIGHBOR_R + 24) * 2));
+                var scale = containerPx / size;
+                var edgeGapPx = (ringBase - CENTER_R - MAX_NEIGHBOR_R * 0.5) * scale;
+                if (edgeGapPx >= MIN_GAP_PX) break;
+                ringBase += 5;
+            }
+            return { size: size, cx: size / 2, cy: size / 2, ringBase: ringBase };
+        }
+
+        var bubbleClipCounter = 0;
+
+        function bubbleMarkup(cx, cy, r, ringClass, logoHref) {
+            var defs = '', img;
+            if (logoHref) {
+                var clipId = 'fin-clip-' + (bubbleClipCounter++);
+                defs = '<clipPath id="' + clipId + '"><circle cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="' + r.toFixed(1) + '"/></clipPath>';
+                img = '<circle cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="' + r.toFixed(1) + '" fill="#ffffff" style="pointer-events:none"/>' +
+                    '<image href="' + esc(logoHref) + '" x="' + (cx - r).toFixed(1) + '" y="' + (cy - r).toFixed(1) + '" width="' + (r * 2).toFixed(1) + '" height="' + (r * 2).toFixed(1) +
+                    '" preserveAspectRatio="xMidYMid slice" clip-path="url(#' + clipId + ')" style="pointer-events:none"/>';
+            } else {
+                img = '<circle cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="' + r.toFixed(1) + '" fill="#eee" style="pointer-events:none"/>';
+            }
+            return { defs: defs, body: img +
+                '<circle class="' + ringClass + '" cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="' + r.toFixed(1) + '" style="pointer-events:none"/>' +
+                '<circle class="bubble-hit" cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="' + r.toFixed(1) + '" fill="transparent"/>' };
+        }
+
+        // --- zoom (local neighborhood) view ---
+
+        // Builds undirected pairs from a set of tickers' own top-IPR neighbor
+        // lists. Convention: edge X->Y is drawn when X is among Y's own
+        // top-IPR neighbors (i.e. Y's prediction draws on X) -- the arrow
+        // points from the attended-to company to the one attending to it.
+        function buildPairs(tickerList, tickerSet) {
+            var pairMap = {};
+            tickerList.forEach(function (ticker) {
+                var qi = tickerToQueryIdx[ticker];
+                if (qi == null) return;
+                QUERIES[qi].neighbors.forEach(function (nb) {
+                    if (!tickerSet.hasOwnProperty(nb.id) || nb.id === ticker) return;
+                    var other = nb.id;
+                    var key = ticker < other ? ticker + '|' + other : other + '|' + ticker;
+                    var rec = pairMap[key] || (pairMap[key] = { a: ticker < other ? ticker : other, b: ticker < other ? other : ticker });
+                    // `ticker` is the query (attender); `other` is in its neighbor
+                    // list, so the drawn arrow is other -> ticker.
+                    if (ticker === rec.a) { rec.wBA = nb.weight; rec.wAB = nb.reverse_weight; rec.bToA = true; }
+                    else { rec.wAB = nb.weight; rec.wBA = nb.reverse_weight; rec.aToB = true; }
+                });
+            });
+            return Object.keys(pairMap).map(function (k) { return pairMap[k]; });
+        }
+
+        function buildZoomSvg(q) {
+            var neighbors = q.neighbors;
+            var containerPx = (canvasBoxEl && canvasBoxEl.clientWidth) || 700;
+            var layout = computeLayout(neighbors.length, containerPx);
+            var cx = layout.cx, cy = layout.cy, ringBase = layout.ringBase;
+
+            var positions = neighbors.map(function (n, i) {
+                var angle = i * GOLDEN_ANGLE;
+                var r = ringBase + RING_GROWTH * Math.sqrt(i);
+                return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
+            });
+
+            var nodeByTicker = {};
+            nodeByTicker[q.id] = { x: cx, y: cy, r: CENTER_R, isCenter: true };
+            neighbors.forEach(function (n, i) {
+                var p = positions[i];
+                var r = scaleLinear(COMPANIES[n.id].inDegree, inDegMin, inDegMax, MIN_NEIGHBOR_R, MAX_NEIGHBOR_R);
+                nodeByTicker[n.id] = { x: p.x, y: p.y, r: r, isCenter: false };
+            });
+            var displayedTickers = Object.keys(nodeByTicker);
+            var pairs = buildPairs(displayedTickers, nodeByTicker);
+            var maxW = Math.max.apply(null, pairs.map(function (p) { return Math.max(p.wAB || 0, p.wBA || 0); }).concat([0.0001]));
+
+            var defs = ['<marker id="fin-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#C75B8C"/></marker>'];
+            var edgeMarkup = [];
+            pairs.forEach(function (p, i) {
+                var a = nodeByTicker[p.a], b = nodeByTicker[p.b];
+                var w = Math.max(p.wAB || 0, p.wBA || 0);
+                var wNorm = w / maxW;
+                var strokeW = (0.5 + Math.sqrt(wNorm) * 1.6).toFixed(2);
+                var opacity = (0.10 + wNorm * 0.25).toFixed(2);
+                var markerAttrs = '';
+                if (p.aToB) markerAttrs += ' marker-end="url(#fin-arrow)"';
+                if (p.bToA) markerAttrs += ' marker-start="url(#fin-arrow)"';
+                edgeMarkup.push('<line class="bubble-edge-hit" x1="' + a.x.toFixed(1) + '" y1="' + a.y.toFixed(1) +
+                    '" x2="' + b.x.toFixed(1) + '" y2="' + b.y.toFixed(1) + '" data-edge-idx="' + i + '"/>');
+                edgeMarkup.push('<line class="bubble-edge" x1="' + a.x.toFixed(1) + '" y1="' + a.y.toFixed(1) +
+                    '" x2="' + b.x.toFixed(1) + '" y2="' + b.y.toFixed(1) + '" stroke-width="' + strokeW +
+                    '" stroke-opacity="' + opacity + '"' + markerAttrs + ' data-edge-idx="' + i + '"/>');
+            });
+
+            var body = [];
+            displayedTickers.forEach(function (ticker) {
+                var node = nodeByTicker[ticker];
+                var ringClass = node.isCenter ? 'bubble-center-ring' : 'bubble-neighbor-ring';
+                var groupClass = node.isCenter ? 'bubble-center' : 'bubble-neighbor';
+                var bm = bubbleMarkup(node.x, node.y, node.r, ringClass, logoUrl(ticker));
+                defs.push(bm.defs);
+                body.push('<g class="' + groupClass + '" data-ticker="' + esc(ticker) + '" tabindex="0">' + bm.body + '</g>');
+            });
+
+            var markup = '<defs>' + defs.join('') + '</defs>' +
+                '<g class="bubble-edges">' + edgeMarkup.join('') + '</g>' + body.join('\n');
+            return { size: layout.size, markup: markup, pairs: pairs };
+        }
+
+        function wireZoomClicks(built) {
+            svgEl.querySelectorAll('.bubble-center, .bubble-neighbor').forEach(function (g) {
+                var ticker = g.getAttribute('data-ticker');
+                var isCenter = g.classList.contains('bubble-center');
+                var handler = function () {
+                    if (isCenter) {
+                        showNodeDetail(ticker, null);
+                    } else {
+                        var idx = tickerToQueryIdx[ticker];
+                        renderZoom(idx);
+                        showNodeDetail(ticker, null);
+                    }
+                };
+                g.addEventListener('click', handler);
+                g.addEventListener('keydown', function (e) { if (e.key === 'Enter') handler(); });
+            });
+            svgEl.querySelectorAll('.bubble-edge-hit').forEach(function (hit) {
+                var idx = parseInt(hit.getAttribute('data-edge-idx'), 10);
+                var p = built.pairs[idx];
+                hit.addEventListener('click', function () { showEdgeDetail(p.a, p.b, p.wAB, p.wBA, p.aToB, p.bToA); });
+            });
+        }
+
+        // --- overview (all companies) ---
+
+        function buildOverviewSvg() {
+            var containerPx = (canvasBoxEl && canvasBoxEl.clientWidth) || 700;
+            var n = QUERIES.length;
+            var maxR = OVERVIEW_RING_BASE + OVERVIEW_RING_GROWTH * Math.sqrt(n);
+            var size = Math.ceil((maxR + OVERVIEW_MAX_R + 20) * 2);
+            var cx = size / 2, cy = size / 2;
+
+            var allTickers = QUERIES.map(function (q) { return q.id; });
+            var nodeByTicker = {};
+            QUERIES.forEach(function (q, i) {
+                var angle = i * GOLDEN_ANGLE;
+                var r0 = OVERVIEW_RING_BASE + OVERVIEW_RING_GROWTH * Math.sqrt(i);
+                var rad = scaleLinear(COMPANIES[q.id].inDegree, inDegMin, inDegMax, OVERVIEW_MIN_R, OVERVIEW_MAX_R);
+                nodeByTicker[q.id] = { x: cx + r0 * Math.cos(angle), y: cy + r0 * Math.sin(angle), r: rad };
+            });
+
+            var pairs = buildPairs(allTickers, nodeByTicker);
+            var maxW = Math.max.apply(null, pairs.map(function (p) { return Math.max(p.wAB || 0, p.wBA || 0); }).concat([0.0001]));
+            var edgeMarkup = pairs.map(function (p) {
+                var a = nodeByTicker[p.a], b = nodeByTicker[p.b];
+                var w = Math.max(p.wAB || 0, p.wBA || 0);
+                var opacity = (0.04 + (w / maxW) * 0.12).toFixed(2);
+                return '<line class="bubble-edge" x1="' + a.x.toFixed(1) + '" y1="' + a.y.toFixed(1) +
+                    '" x2="' + b.x.toFixed(1) + '" y2="' + b.y.toFixed(1) + '" stroke-width="0.5" stroke-opacity="' + opacity + '"/>';
+            });
+
+            var body = [];
+            allTickers.forEach(function (ticker) {
+                var node = nodeByTicker[ticker];
+                body.push('<g class="bubble-neighbor overview-node" data-ticker="' + esc(ticker) + '" tabindex="0">' +
+                    '<circle class="bubble-neighbor-ring" cx="' + node.x.toFixed(1) + '" cy="' + node.y.toFixed(1) + '" r="' + node.r.toFixed(1) + '"/>' +
+                    '<circle class="bubble-hit" cx="' + node.x.toFixed(1) + '" cy="' + node.y.toFixed(1) + '" r="' + Math.max(node.r, 6).toFixed(1) + '" fill="transparent"/>' +
+                    '</g>');
+            });
+            body.unshift('<g class="bubble-edges">' + edgeMarkup.join('') + '</g>');
+            return { size: Math.max(size, MIN_SIZE), markup: '<defs></defs>' + body.join('\n') };
+        }
+
+        function wireOverviewClicks() {
+            svgEl.querySelectorAll('.overview-node').forEach(function (g) {
+                var ticker = g.getAttribute('data-ticker');
+                var handler = function () {
+                    mode = 'zoom';
+                    if (zoomOutBtn) zoomOutBtn.textContent = 'Zoom out (see all 515)';
+                    renderZoom(tickerToQueryIdx[ticker]);
+                    showNodeDetail(ticker, null);
+                };
+                g.addEventListener('click', handler);
+                g.addEventListener('keydown', function (e) { if (e.key === 'Enter') handler(); });
+            });
+        }
+
+        function renderOverview() {
+            hideDetail();
+            closeSearch();
+            queryCardEl.innerHTML = '<div class="finance-overview-note">All 515 companies, sized by in-degree (how often they show up as someone else\'s top neighbor). Click one to zoom in.</div>';
+            var built = buildOverviewSvg();
+            svgEl.setAttribute('viewBox', '0 0 ' + built.size + ' ' + built.size);
+            svgEl.innerHTML = built.markup;
+            wireOverviewClicks();
+        }
+
+        function toggleOverview() {
+            if (mode === 'zoom') {
+                lastZoomIndex = currentIndex;
+                mode = 'overview';
+                zoomOutBtn.textContent = 'Exit overview';
+                renderOverview();
+            } else {
+                mode = 'zoom';
+                zoomOutBtn.textContent = 'Zoom out (see all 515)';
+                renderZoom(lastZoomIndex);
+            }
+        }
+
+        // --- detail panel ---
+
+        function detailRow(label, value) {
+            return '<div class="bubble-detail-row"><span class="bubble-detail-label">' + label +
+                '</span><span class="bubble-detail-value">' + value + '</span></div>';
+        }
+
+        function renderQueryCard(ticker) {
+            var c = COMPANIES[ticker];
+            var logo = logoUrl(ticker);
+            queryCardEl.innerHTML =
+                '<div class="finance-query-logo">' + (logo ? '<img src="' + esc(logo) + '" alt="">' : '') + '</div>' +
+                '<div class="finance-query-info">' +
+                    '<div class="finance-query-name">' + esc(c.name) + ' <span class="finance-query-ticker">(' + esc(ticker) + ')</span></div>' +
+                    '<div class="finance-query-sector">' + esc(c.sector) + (c.industry ? ' &middot; ' + esc(c.industry) : '') + '</div>' +
+                '</div>';
+        }
+
+        function showNodeDetail(ticker, weightFromQuery) {
+            var c = COMPANIES[ticker];
+            var logo = logoUrl(ticker);
+            var html = '<div class="finance-detail-logo">' + (logo ? '<img src="' + esc(logo) + '" alt="">' : '') + '</div>';
+            html += '<div class="finance-detail-body">';
+            html += '<div class="bubble-detail-name">' + esc(c.name) + ' (' + esc(ticker) + ')</div>';
+            html += '<div class="bubble-detail-rows">' +
+                detailRow('Sector', esc(c.sector)) +
+                detailRow('Market cap', fmtMoney(c.marketCap)) +
+                detailRow('Revenue', fmtMoney(c.totalRevenue)) +
+                detailRow('Profit margin', fmtPct(c.profitMargins)) +
+                detailRow('Revenue growth', fmtPct(c.revenueGrowth)) +
+                detailRow('Employees', fmtInt(c.fullTimeEmployees)) +
+                detailRow('In-degree (times cited as a top neighbor)', c.inDegree) +
+                '</div>';
+            html += '<div class="bubble-detail-target">Price/Sales (target): ' + c.priceToSales.toFixed(2) +
+                ' &mdash; rank ' + c.rank + ' of ' + Object.keys(COMPANIES).length + '</div>';
+            if (weightFromQuery != null) {
+                html += '<div class="bubble-detail-weight">\\(\\alpha = ' + weightFromQuery.toFixed(4) + '\\) (attention from query)</div>';
+            }
+            html += '</div>';
+            detailEl.innerHTML = html;
+            detailEl.style.display = '';
+            if (window.MathJax && window.MathJax.typesetPromise) {
+                window.MathJax.typesetPromise([detailEl]).catch(function () {});
+            }
+        }
+
+        function showEdgeDetail(tickerA, tickerB, wAB, wBA, aToB, bToA) {
+            var a = COMPANIES[tickerA], b = COMPANIES[tickerB];
+            var arrow = (aToB && bToA) ? '&harr;' : (aToB ? '&rarr;' : '&larr;');
+            var html = '<div class="finance-edge-detail">';
+            html += '<div class="bubble-detail-name">' + esc(a.name) + ' (' + esc(tickerA) + ') ' + arrow + ' ' +
+                esc(b.name) + ' (' + esc(tickerB) + ')</div>';
+            html += '<div class="bubble-detail-rows">' +
+                detailRow(esc(tickerA) + ' &rarr; ' + esc(tickerB), '\\(\\alpha = ' + wAB.toFixed(4) + '\\)') +
+                detailRow(esc(tickerB) + ' &rarr; ' + esc(tickerA), '\\(\\alpha = ' + wBA.toFixed(4) + '\\)') +
+                '</div>';
+            html += '</div>';
+            detailEl.innerHTML = html;
+            detailEl.style.display = '';
+            if (window.MathJax && window.MathJax.typesetPromise) {
+                window.MathJax.typesetPromise([detailEl]).catch(function () {});
+            }
+        }
+
+        function hideDetail() {
+            detailEl.style.display = 'none';
+            detailEl.innerHTML = '';
+        }
+
+        // --- search ---
+
+        function searchResultRow(ticker, idx) {
+            var c = COMPANIES[ticker];
+            var logo = logoUrl(ticker);
+            return '<div class="bubble-list-row" data-qidx="' + idx + '" tabindex="0">' +
+                (logo ? '<img class="bubble-list-art fin-logo-img" src="' + esc(logo) + '" alt="">' : '<div class="bubble-list-art"></div>') +
+                '<div class="bubble-list-info">' +
+                    '<div class="bubble-list-name">' + esc(c.name) + '</div>' +
+                    '<div class="bubble-list-artist">' + esc(ticker) + ' &middot; ' + esc(c.sector) + '</div>' +
+                '</div>' +
+                '<div class="bubble-list-pop">' + fmtMoney(c.marketCap) + '</div>' +
+            '</div>';
+        }
+
+        function renderSearchResults() {
+            var q = searchInputEl.value.trim().toLowerCase();
+            if (!q) {
+                searchResultsEl.innerHTML = '<div class="bubble-search-empty">Type a company name or ticker to search all 515 companies.</div>';
+                return;
+            }
+            var matches = [];
+            for (var i = 0; i < QUERIES.length; i++) {
+                var ticker = QUERIES[i].id;
+                var c = COMPANIES[ticker];
+                if (ticker.toLowerCase().indexOf(q) !== -1 || c.name.toLowerCase().indexOf(q) !== -1) {
+                    matches.push(i);
+                    if (matches.length >= 400) break;
+                }
+            }
+            matches.sort(function (a, b) { return COMPANIES[QUERIES[b].id].marketCap - COMPANIES[QUERIES[a].id].marketCap; });
+            matches = matches.slice(0, SEARCH_RESULT_LIMIT);
+            if (matches.length === 0) {
+                searchResultsEl.innerHTML = '<div class="bubble-search-empty">No matching companies.</div>';
+                return;
+            }
+            searchResultsEl.innerHTML = matches.map(function (idx) { return searchResultRow(QUERIES[idx].id, idx); }).join('');
+            searchResultsEl.querySelectorAll('.bubble-list-row').forEach(function (row) {
+                var idx = parseInt(row.getAttribute('data-qidx'), 10);
+                row.addEventListener('click', function () { selectQuery(idx); });
+                row.addEventListener('keydown', function (e) { if (e.key === 'Enter') selectQuery(idx); });
+            });
+        }
+
+        function closeSearch() {
+            searchBoxEl.style.display = 'none';
+            canvasBoxEl.style.display = '';
+            searchInputEl.value = '';
+            if (searchToggleBtn) searchToggleBtn.textContent = 'Search';
+        }
+
+        function toggleSearch() {
+            var isOpen = searchBoxEl.style.display !== 'none';
+            if (isOpen) {
+                closeSearch();
+            } else {
+                canvasBoxEl.style.display = 'none';
+                searchBoxEl.style.display = '';
+                searchToggleBtn.textContent = 'Show graph';
+                renderSearchResults();
+                searchInputEl.focus();
+            }
+        }
+
+        function selectQuery(idx) {
+            closeSearch();
+            mode = 'zoom';
+            zoomOutBtn.textContent = 'Zoom out (see all 515)';
+            renderZoom(idx);
+        }
+
+        function updateBackBtn() {
+            if (!backBtn) return;
+            backBtn.disabled = zoomHistory.length === 0;
+            backBtn.style.opacity = zoomHistory.length === 0 ? '0.5' : '1';
+        }
+
+        // `fromHistory` is true only when called by goBack() itself, so going
+        // back doesn't re-push the node we just left onto the stack.
+        function renderZoom(idx, fromHistory) {
+            if (mode === 'zoom' && currentIndex !== idx && !fromHistory) {
+                zoomHistory.push(currentIndex);
+                updateBackBtn();
+            }
+            currentIndex = idx;
+            mode = 'zoom';
+            var q = QUERIES[idx];
+            hideDetail();
+            renderQueryCard(q.id);
+            var built = buildZoomSvg(q);
+            svgEl.setAttribute('viewBox', '0 0 ' + built.size + ' ' + built.size);
+            svgEl.innerHTML = built.markup;
+            wireZoomClicks(built);
+        }
+
+        function goBack() {
+            if (zoomHistory.length === 0) return;
+            var idx = zoomHistory.pop();
+            updateBackBtn();
+            closeSearch();
+            renderZoom(idx, true);
+        }
+
+        function regenerate() {
+            if (!QUERIES || QUERIES.length < 2) return;
+            var next;
+            do { next = Math.floor(Math.random() * QUERIES.length); } while (next === currentIndex);
+            closeSearch();
+            renderZoom(next);
+        }
+
+        function init() {
+            svgEl = document.getElementById('financeSvg');
+            queryCardEl = document.getElementById('financeQueryCard');
+            canvasBoxEl = document.querySelector('#financeDiagram .bubble-canvas-box');
+            detailEl = document.getElementById('financeDetail');
+            regenBtn = document.getElementById('financeRegenerate');
+            searchToggleBtn = document.getElementById('financeSearchToggle');
+            zoomOutBtn = document.getElementById('financeZoomOut');
+            backBtn = document.getElementById('financeBack');
+            searchBoxEl = document.getElementById('financeSearch');
+            searchInputEl = document.getElementById('financeSearchInput');
+            searchResultsEl = document.getElementById('financeSearchResults');
+            loadingEl = document.getElementById('financeLoading');
+            if (!svgEl || !detailEl) return;
+
+            if (backBtn) backBtn.addEventListener('click', goBack);
+            updateBackBtn();
+            if (regenBtn) regenBtn.addEventListener('click', regenerate);
+            if (searchToggleBtn) searchToggleBtn.addEventListener('click', toggleSearch);
+            if (zoomOutBtn) zoomOutBtn.addEventListener('click', toggleOverview);
+            if (searchInputEl) searchInputEl.addEventListener('input', renderSearchResults);
+
+            fetch(DATA_URL).then(function (r) { return r.json(); }).then(function (data) {
+                COMPANIES = data.companies;
+                QUERIES = data.queries;
+                tickerToQueryIdx = {};
+                QUERIES.forEach(function (q, i) { tickerToQueryIdx[q.id] = i; });
+                var degs = Object.keys(COMPANIES).map(function (t) { return COMPANIES[t].inDegree; });
+                inDegMin = Math.min.apply(null, degs);
+                inDegMax = Math.max.apply(null, degs);
+                if (loadingEl) loadingEl.style.display = 'none';
+                renderZoom(Math.floor(Math.random() * QUERIES.length), true);
+            }).catch(function () {
+                if (loadingEl) loadingEl.textContent = 'Could not load company data.';
+            });
+        }
+
+        window.initFinanceGraph = init;
     })();
     </script>
 

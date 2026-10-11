@@ -1,0 +1,1044 @@
+<!-- blog.html -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blog</title>
+    <link rel="stylesheet" href="styles.css?v=2"> <!-- Link to your existing CSS file -->
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+</head>
+<body><script>window.addEventListener("DOMContentLoaded", function(){ var g=document.getElementById("passwordGate"); var c=document.getElementById("protectedContent"); if(g) g.style.display="none"; if(c) c.style.display=""; });</script><script>window.addEventListener("DOMContentLoaded", function(){ var g=document.getElementById("passwordGate"); var c=document.getElementById("protectedContent"); if(g) g.style.display="none"; if(c) c.style.display=""; });</script>
+    <div id="passwordGate" class="password-gate">
+        <div class="password-gate-box">
+            <p class="password-gate-label">This post is password protected.</p>
+            <div class="password-gate-row">
+                <input type="password" id="passwordInput" class="password-gate-input" placeholder="Password" autocomplete="off">
+                <button class="password-gate-submit" id="passwordSubmit">Unlock</button>
+            </div>
+            <p class="password-gate-error" id="passwordError"></p>
+        </div>
+    </div>
+
+    <div id="protectedContent" style="display: none;">
+    <header>
+        <h1>On tabular foundation models</h1>
+    </header>
+
+    <main>
+        <p>I've been investigating tabular foundation models, which I have found to be very interesting conceptually. Think about tabular foundation models as ChatGPT for datasets. ChatGPT seems to know everything that natural language has to offer because it is a transformer-based architecture thrown at all the textual data we have - all of the internet, books, etc. Therefore, it is extraoardinarily good at next-word completion. Tabular foundation models are similar: we throw a transformer-based architecture at billions of synthetically-generated datasets. Therefore, when presented with a new dataset, it is very good at coming up with predictions for an out-of-sample point.</p>
+
+        <p>Tabular foundation models come from a <a href="https://arxiv.org/pdf/2112.10510">Bayesian inference perspective</a>. However, in this post, I'd like to motivate a kernel regression point of view. This viewpoint is well-motivated by the architectural design of the model, which is why I particularly like it. In modern ML, architectural designs can seem very black-boxy!</p>
+
+        <p>In a nutshell, what tabular foundation models do is they embed each row in your context, as well as the query row, and let the query attend to all of these context embeddings. This lends itself naturally to a kernel regression interpretation of tabular foundation models. The query decides how important each context point is towards prediction. This creates a <it>target-aware</it> kernel.</p>
+        
+        <p>Here's a general retrieval algorithm using tabular foundation models. You can use a (good) tabular foundation model of your choice, denoted TFM.</p>
+
+        <div class="algo-box">
+            <div class="algo-title">Algorithm: \(\textbf{SoftRetrieve}(\mathcal{D}, x)\)</div>
+            <div class="algo-io">
+                <strong>Input:</strong> \(\mathcal{D} = \{x_1, \ldots, x_n\}\), query point \(x\)<br>
+                <strong>Output:</strong> soft retrieval weights over \(\mathcal{D}\) for \(x\)
+            </div>
+            <ol class="algo-steps">
+                <li>Run \(\mathrm{TFM}(\text{context} = \mathcal{D},\ \text{queries} = \mathcal{D})\).</li>
+                <li>For each head \(h\), compute self-attention \(\displaystyle s_h = \frac{1}{n}\sum_{i=1}^{n} \alpha_h(x_i, x_i)\).</li>
+                <li>Let \(h^\ast = \arg\max_h s_h\).</li>
+                <li>Run \(\mathrm{TFM}(\text{context} = \mathcal{D},\ \text{query} = x)\).</li>
+                <li><strong>return</strong> \(\alpha_{h^\ast}(\cdot,\, x)\).</li>
+            </ol>
+        </div>
+        <p>In my experiments, I found that these weights this soft retrieval was quite good - the kernel regression estimate that resulted from it was better than LGBM in some cases (in particular the example below), and very predictive.</p>
+        <p>Here, we demonstrate this algorithm on a Spotify dataset, where the goal is to predict the popularity of a song. Our TFM of choice is TabICLv2. We found that the average <a href="https://en.wikipedia.org/wiki/R%C3%A9nyi_entropy#Special_cases" target="_blank" rel="noopener">IPR</a> was \(11.86\) (with a context size of \(5000\)), showing that the TFM identifies incredibly tight neighborhoods. This phenomenon is not particular to TabICLv2.</p>
+
+        <div class="tab-bar">
+            <button class="tab-btn active" id="tabBtnMusic" type="button">Music</button>
+            <button class="tab-btn" id="tabBtnFinance" type="button">Finance</button>
+        </div>
+
+        <div class="tab-panel" id="tabPanelMusic">
+        <figure class="bubble-figure" id="bubbleDiagram">
+            <div class="bubble-controls">
+                <button class="sim-btn bubble-regenerate" id="bubbleRegenerate" type="button">&#8635; Regenerate</button>
+                <button class="sim-btn bubble-search-toggle" id="bubbleSearchToggle" type="button">Search</button>
+            </div>
+            <div class="bubble-loading" id="bubbleLoading">Loading track data&hellip;</div>
+            <div class="bubble-query-player">
+                <iframe src="" width="100%" height="152" frameborder="0" allow="encrypted-media" loading="lazy" title="Query track preview"></iframe>
+            </div>
+            <div class="bubble-canvas-box">
+                <svg class="bubble-svg" viewBox="0 0 420 420" xmlns="http://www.w3.org/2000/svg"></svg>
+            </div>
+            <div class="bubble-search" id="bubbleSearch" style="display:none">
+                <input type="text" class="bubble-search-input" id="bubbleSearchInput" placeholder="Search any of the 4,000 query tracks by title or artist&hellip;">
+                <div class="bubble-search-results" id="bubbleSearchResults"></div>
+            </div>
+            <div class="bubble-detail" id="bubbleDetail" style="display:none">
+                <div class="bubble-detail-player">
+                    <iframe id="bubbleDetailIframe" src="" width="100%" height="152" frameborder="0" allow="encrypted-media" loading="lazy" title="Selected track preview"></iframe>
+                </div>
+                <div class="bubble-detail-attrs" id="bubbleDetailAttrs"></div>
+            </div>
+        </figure>
+        </div>
+
+        <div class="tab-panel" id="tabPanelFinance" style="display:none">
+        <figure class="bubble-figure" id="financeDiagram">
+            <div class="bubble-controls">
+                <button class="sim-btn" id="financeRegenerate" type="button">&#8635; Regenerate</button>
+                <button class="sim-btn" id="financeSearchToggle" type="button">Search</button>
+            </div>
+            <div class="bubble-loading" id="financeLoading">Loading company data&hellip;</div>
+            <div class="finance-query-card" id="financeQueryCard"></div>
+            <div class="bubble-canvas-box">
+                <svg class="bubble-svg" id="financeSvg" viewBox="0 0 420 420" xmlns="http://www.w3.org/2000/svg"></svg>
+            </div>
+            <div class="bubble-search" id="financeSearch" style="display:none">
+                <input type="text" class="bubble-search-input" id="financeSearchInput" placeholder="Search any of the 515 companies by name or ticker&hellip;">
+                <div class="bubble-search-results" id="financeSearchResults"></div>
+            </div>
+            <div class="bubble-detail" id="financeDetail" style="display:none"></div>
+            <figcaption>Attention from a real TabICL experiment on 515 S&amp;P-500-plus-AI live company fundamentals, predicting price/sales from financials. Edges are directional (A&rarr;B drawn only if B is among A's own top-attention neighbors) and faint by design &mdash; click one to see both directions' weights.</figcaption>
+        </figure>
+        </div>
+
+    </main>
+
+<!-- <footer>[1] <br>
+        [2] </footer> -->
+    </div>
+
+    <script>
+    (function () {
+        'use strict';
+
+        var SVG_NS = 'http://www.w3.org/2000/svg';
+        var XLINK_NS = 'http://www.w3.org/1999/xlink';
+        var DATA_URL = 'bubble_data.json';
+
+        var GOLDEN_ANGLE = 137.50776405003785 * Math.PI / 180;
+        var CENTER_R = 54;         // the query bubble's own radius
+        var RING_BASE_MIN = 90;    // starting point before enforcing min spacing
+        var RING_GROWTH = 37;
+        var MIN_NEIGHBOR_R = 14, MAX_NEIGHBOR_R = 32;
+        var MIN_SIZE = 420;
+        var MIN_GAP_PX = 83.5;     // ~2.2cm at 96dpi, measured at the canvas's actual rendered width
+        var SEARCH_RESULT_LIMIT = 40;
+
+        var TRACKS = null, QUERIES = null;
+        var currentIndex = 0;
+        var artCache = {};
+        var artClipCounter = 0;
+        var ART_STORAGE_PREFIX = 'bubbleArt:';
+        var ART_DISPATCH_MS = 90;   // stagger request starts (~11/sec max) to stay well under Spotify's rate limit
+        var artQueue = [];
+        var artDispatching = false;
+
+        var svgEl, playerEl, detailEl, detailIframeEl, detailAttrsEl,
+            regenBtn, searchToggleBtn, searchBoxEl, searchInputEl, searchResultsEl,
+            canvasBoxEl, loadingEl;
+
+        function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+
+        function getPersistedArt(id) {
+            try {
+                var v = localStorage.getItem(ART_STORAGE_PREFIX + id);
+                return v === null ? undefined : JSON.parse(v);
+            } catch (e) { return undefined; }
+        }
+
+        function setPersistedArt(id, url) {
+            try { localStorage.setItem(ART_STORAGE_PREFIX + id, JSON.stringify(url)); } catch (e) { /* ignore (quota, privacy mode) */ }
+        }
+
+        function pumpArtQueue() {
+            if (artDispatching) return;
+            artDispatching = true;
+            (function next() {
+                if (artQueue.length === 0) { artDispatching = false; return; }
+                (artQueue.shift())();
+                setTimeout(next, ART_DISPATCH_MS);
+            })();
+        }
+
+        function enqueueArtFetch(taskFn) {
+            return new Promise(function (resolve) {
+                artQueue.push(function () { taskFn().then(resolve); });
+                pumpArtQueue();
+            });
+        }
+
+        function fetchArtOnce(id, attempt) {
+            var url = 'https://open.spotify.com/oembed?url=' + encodeURIComponent('https://open.spotify.com/track/' + id);
+            return fetch(url).then(function (r) {
+                if (r.status === 429 && attempt < 3) {
+                    var delay = 700 * Math.pow(2, attempt);
+                    return new Promise(function (res) { setTimeout(res, delay); })
+                        .then(function () { return fetchArtOnce(id, attempt + 1); });
+                }
+                if (!r.ok) throw new Error('bad response ' + r.status);
+                return r.json();
+            }).then(function (data) {
+                return (data && data.thumbnail_url) ? data.thumbnail_url : null;
+            });
+        }
+
+        // Caches successful lookups in localStorage forever (so a track's art
+        // is fetched at most once per browser, ever). Failures (including a
+        // 429 that persists through the retries above) are deliberately NOT
+        // cached, in memory or on disk, so a later regenerate/search attempt
+        // can retry once the rate limit has cleared instead of being stuck
+        // with a permanently-missing bubble.
+        function fetchArt(id) {
+            if (artCache[id]) return artCache[id];
+            var persisted = getPersistedArt(id);
+            if (persisted !== undefined) {
+                var resolved = Promise.resolve(persisted);
+                artCache[id] = resolved;
+                return resolved;
+            }
+            var p = enqueueArtFetch(function () { return fetchArtOnce(id, 0); })
+                .then(function (url) {
+                    setPersistedArt(id, url);
+                    return url;
+                })
+                .catch(function () {
+                    delete artCache[id];
+                    return null;
+                });
+            artCache[id] = p;
+            return p;
+        }
+
+        function scaleRadius(pop, minPop, maxPop) {
+            if (maxPop === minPop) return (MIN_NEIGHBOR_R + MAX_NEIGHBOR_R) / 2;
+            var t = (pop - minPop) / (maxPop - minPop);
+            return MIN_NEIGHBOR_R + t * (MAX_NEIGHBOR_R - MIN_NEIGHBOR_R);
+        }
+
+        // Grows the center-to-ring radius until the nearest neighbor sits at
+        // least ~1cm (in real rendered pixels) from the query bubble, given
+        // the canvas's current on-screen width (the <svg> scales to fill it).
+        function computeLayout(n, containerPx, nearestNeighborR) {
+            var ringBase = RING_BASE_MIN, size, maxR;
+            for (var iter = 0; iter < 60; iter++) {
+                maxR = ringBase + RING_GROWTH * Math.sqrt(Math.max(0, n - 1));
+                size = Math.max(MIN_SIZE, Math.ceil((maxR + MAX_NEIGHBOR_R + 24) * 2));
+                var scale = containerPx / size;
+                // the gap that matters is between the EDGES of the query bubble
+                // and its nearest neighbor, not their centers.
+                var edgeGapPx = (ringBase - CENTER_R - nearestNeighborR) * scale;
+                if (edgeGapPx >= MIN_GAP_PX) break;
+                ringBase += 5;
+            }
+            return { size: size, cx: size / 2, cy: size / 2, ringBase: ringBase };
+        }
+
+        function placeholderBubbleMarkup(cx, cy, r, ringClass) {
+            return '<circle class="bubble-placeholder" cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="' + r.toFixed(1) + '" fill="#eee" style="pointer-events:none"/>' +
+                '<circle class="' + ringClass + '" cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="' + r.toFixed(1) + '" style="pointer-events:none"/>' +
+                '<circle class="bubble-hit" cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="' + r.toFixed(1) + '" fill="transparent"/>';
+        }
+
+        function buildBubbleSvg(q) {
+            var neighbors = q.neighbors;
+            var containerPx = (canvasBoxEl && canvasBoxEl.clientWidth) || 700;
+            var pops = neighbors.map(function (n) { return TRACKS[n.id].popularity; });
+            var minPop = Math.min.apply(null, pops), maxPop = Math.max.apply(null, pops);
+            // neighbors are pre-sorted by attention weight, so index 0 is always
+            // the one placed nearest the query -- its own radius (which depends
+            // on its popularity, not its weight) has to be accounted for too.
+            var nearestR = neighbors.length > 0 ? scaleRadius(TRACKS[neighbors[0].id].popularity, minPop, maxPop) : 0;
+            var layout = computeLayout(neighbors.length, containerPx, nearestR);
+            var cx = layout.cx, cy = layout.cy, ringBase = layout.ringBase;
+
+            var positions = neighbors.map(function (n, i) {
+                var angle = i * GOLDEN_ANGLE;
+                var r = ringBase + RING_GROWTH * Math.sqrt(i);
+                return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
+            });
+
+            var body = ['<defs></defs>'];
+            body.push('<g class="bubble-center" data-kind="query" tabindex="0">' +
+                placeholderBubbleMarkup(cx, cy, CENTER_R, 'bubble-center-ring') + '</g>');
+
+            var radii = [];
+            neighbors.forEach(function (n, i) {
+                var p = positions[i];
+                var r = scaleRadius(TRACKS[n.id].popularity, minPop, maxPop);
+                radii.push(r);
+                body.push('<g class="bubble-neighbor" data-kind="neighbor" data-idx="' + i + '" tabindex="0">' +
+                    placeholderBubbleMarkup(p.x, p.y, r, 'bubble-neighbor-ring') + '</g>');
+            });
+
+            return { size: layout.size, cx: cx, cy: cy, positions: positions, radii: radii, markup: body.join('\n') };
+        }
+
+        function applyArt(groupEl, cx, cy, r, url) {
+            var defs = svgEl.querySelector('defs');
+            if (!defs || !groupEl) return;
+            var clipId = 'bubble-art-clip-' + (artClipCounter++);
+            var clip = document.createElementNS(SVG_NS, 'clipPath');
+            clip.setAttribute('id', clipId);
+            var cc = document.createElementNS(SVG_NS, 'circle');
+            cc.setAttribute('cx', cx.toFixed(1));
+            cc.setAttribute('cy', cy.toFixed(1));
+            cc.setAttribute('r', r.toFixed(1));
+            clip.appendChild(cc);
+            defs.appendChild(clip);
+
+            var img = document.createElementNS(SVG_NS, 'image');
+            img.setAttributeNS(XLINK_NS, 'href', url);
+            img.setAttribute('href', url);
+            img.setAttribute('x', (cx - r).toFixed(1));
+            img.setAttribute('y', (cy - r).toFixed(1));
+            img.setAttribute('width', (r * 2).toFixed(1));
+            img.setAttribute('height', (r * 2).toFixed(1));
+            img.setAttribute('preserveAspectRatio', 'xMidYMid slice');
+            img.setAttribute('clip-path', 'url(#' + clipId + ')');
+            img.style.pointerEvents = 'none';
+
+            var placeholder = groupEl.querySelector('circle.bubble-placeholder');
+            groupEl.insertBefore(img, groupEl.firstChild);
+            if (placeholder) placeholder.parentNode.removeChild(placeholder);
+        }
+
+        function loadArtForCurrentExample(q, built) {
+            var myIndex = currentIndex;
+            var centerG = svgEl.querySelector('.bubble-center');
+            fetchArt(q.id).then(function (url) {
+                if (currentIndex !== myIndex || !url) return;
+                applyArt(centerG, built.cx, built.cy, CENTER_R, url);
+            });
+            q.neighbors.forEach(function (n, i) {
+                fetchArt(n.id).then(function (url) {
+                    if (currentIndex !== myIndex || !url) return;
+                    var g = svgEl.querySelector('.bubble-neighbor[data-idx="' + i + '"]');
+                    if (!g) return;
+                    applyArt(g, built.positions[i].x, built.positions[i].y, built.radii[i], url);
+                });
+            });
+        }
+
+        function detailRow(label, value) {
+            return '<div class="bubble-detail-row"><span class="bubble-detail-label">' + label +
+                '</span><span class="bubble-detail-value">' + value + '</span></div>';
+        }
+
+        function showDetail(trackId, weight) {
+            var t = TRACKS[trackId];
+            if (!t) return;
+            detailIframeEl.src = 'https://open.spotify.com/embed/track/' + trackId;
+            var html = '<div class="bubble-detail-rows">' +
+                detailRow('Energy', t.energy.toFixed(2)) +
+                detailRow('Loudness', t.loudness.toFixed(1) + ' dB') +
+                detailRow('Instrumentalness', t.instrumentalness.toFixed(3)) +
+                detailRow('Release year', t.release_year) +
+                detailRow('Tempo', Math.round(t.tempo) + ' BPM') +
+                '</div>';
+            html += '<div class="bubble-detail-target">Popularity (target): ' + Math.round(t.popularity) + '</div>';
+            if (weight != null) {
+                html += '<div class="bubble-detail-weight">\\(\\alpha = ' + weight.toFixed(4) + '\\)</div>';
+            }
+            detailAttrsEl.innerHTML = html;
+            detailEl.style.display = '';
+            if (window.MathJax && window.MathJax.typesetPromise) {
+                window.MathJax.typesetPromise([detailAttrsEl]).catch(function () {});
+            }
+        }
+
+        function hideDetail() {
+            detailEl.style.display = 'none';
+            detailIframeEl.src = '';
+            detailAttrsEl.innerHTML = '';
+        }
+
+        function wireBubbleClicks(q) {
+            var centerG = svgEl.querySelector('.bubble-center');
+            if (centerG) {
+                centerG.addEventListener('click', function () { showDetail(q.id, null); });
+                centerG.addEventListener('keydown', function (e) { if (e.key === 'Enter') showDetail(q.id, null); });
+            }
+            svgEl.querySelectorAll('.bubble-neighbor').forEach(function (g) {
+                var idx = parseInt(g.getAttribute('data-idx'), 10);
+                var n = q.neighbors[idx];
+                g.addEventListener('click', function () { showDetail(n.id, n.weight); });
+                g.addEventListener('keydown', function (e) { if (e.key === 'Enter') showDetail(n.id, n.weight); });
+            });
+        }
+
+        // --- search across all query tracks (select one to make it the new query) ---
+
+        function renderSearchResults() {
+            var q = searchInputEl.value.trim().toLowerCase();
+            if (!q) {
+                searchResultsEl.innerHTML = '<div class="bubble-search-empty">Type a song or artist name to search the 4,000 query tracks.</div>';
+                return;
+            }
+            var matches = [];
+            for (var i = 0; i < QUERIES.length; i++) {
+                var t = TRACKS[QUERIES[i].id];
+                if (t.name.toLowerCase().indexOf(q) !== -1 || t.artist.toLowerCase().indexOf(q) !== -1) {
+                    matches.push(i);
+                    if (matches.length >= 400) break;
+                }
+            }
+            matches.sort(function (a, b) { return TRACKS[QUERIES[b].id].popularity - TRACKS[QUERIES[a].id].popularity; });
+            matches = matches.slice(0, SEARCH_RESULT_LIMIT);
+            if (matches.length === 0) {
+                searchResultsEl.innerHTML = '<div class="bubble-search-empty">No matching query tracks.</div>';
+                return;
+            }
+            searchResultsEl.innerHTML = matches.map(function (idx) {
+                var tt = TRACKS[QUERIES[idx].id];
+                return '<div class="bubble-list-row" data-qidx="' + idx + '" tabindex="0">' +
+                    '<img class="bubble-list-art" data-track-id="' + esc(QUERIES[idx].id) + '" alt="">' +
+                    '<div class="bubble-list-info">' +
+                        '<div class="bubble-list-name">' + esc(tt.name) + '</div>' +
+                        '<div class="bubble-list-artist">' + esc(tt.artist) + '</div>' +
+                    '</div>' +
+                    '<div class="bubble-list-pop">' + Math.round(tt.popularity) + '</div>' +
+                '</div>';
+            }).join('');
+            searchResultsEl.querySelectorAll('.bubble-list-row').forEach(function (row) {
+                var idx = parseInt(row.getAttribute('data-qidx'), 10);
+                row.addEventListener('click', function () { selectQuery(idx); });
+                row.addEventListener('keydown', function (e) { if (e.key === 'Enter') selectQuery(idx); });
+            });
+            searchResultsEl.querySelectorAll('img.bubble-list-art').forEach(function (img) {
+                var id = img.getAttribute('data-track-id');
+                fetchArt(id).then(function (url) { if (url) img.src = url; });
+            });
+        }
+
+        function closeSearch() {
+            searchBoxEl.style.display = 'none';
+            canvasBoxEl.style.display = '';
+            searchInputEl.value = '';
+            if (searchToggleBtn) searchToggleBtn.textContent = 'Search';
+        }
+
+        function toggleSearch() {
+            var isOpen = searchBoxEl.style.display !== 'none';
+            if (isOpen) {
+                closeSearch();
+            } else {
+                canvasBoxEl.style.display = 'none';
+                searchBoxEl.style.display = '';
+                searchToggleBtn.textContent = 'Show bubbles';
+                renderSearchResults();
+                searchInputEl.focus();
+            }
+        }
+
+        function selectQuery(idx) {
+            closeSearch();
+            renderExample(idx);
+        }
+
+        function renderExample(idx) {
+            currentIndex = idx;
+            var q = QUERIES[idx];
+            hideDetail();
+            playerEl.src = 'https://open.spotify.com/embed/track/' + q.id;
+            var built = buildBubbleSvg(q);
+            svgEl.setAttribute('viewBox', '0 0 ' + built.size + ' ' + built.size);
+            svgEl.innerHTML = built.markup;
+            wireBubbleClicks(q);
+            loadArtForCurrentExample(q, built);
+        }
+
+        function regenerate() {
+            if (!QUERIES || QUERIES.length < 2) return;
+            var next;
+            do { next = Math.floor(Math.random() * QUERIES.length); } while (next === currentIndex);
+            closeSearch();
+            renderExample(next);
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            svgEl = document.querySelector('#bubbleDiagram .bubble-svg');
+            playerEl = document.querySelector('#bubbleDiagram .bubble-query-player iframe');
+            canvasBoxEl = document.querySelector('#bubbleDiagram .bubble-canvas-box');
+            detailEl = document.getElementById('bubbleDetail');
+            detailIframeEl = document.getElementById('bubbleDetailIframe');
+            detailAttrsEl = document.getElementById('bubbleDetailAttrs');
+            regenBtn = document.getElementById('bubbleRegenerate');
+            searchToggleBtn = document.getElementById('bubbleSearchToggle');
+            searchBoxEl = document.getElementById('bubbleSearch');
+            searchInputEl = document.getElementById('bubbleSearchInput');
+            searchResultsEl = document.getElementById('bubbleSearchResults');
+            loadingEl = document.getElementById('bubbleLoading');
+            if (!svgEl || !playerEl || !detailEl) return;
+
+            if (regenBtn) regenBtn.addEventListener('click', regenerate);
+            if (searchToggleBtn) searchToggleBtn.addEventListener('click', toggleSearch);
+            if (searchInputEl) searchInputEl.addEventListener('input', renderSearchResults);
+
+            fetch(DATA_URL).then(function (r) { return r.json(); }).then(function (data) {
+                TRACKS = data.tracks;
+                QUERIES = data.queries;
+                if (loadingEl) loadingEl.style.display = 'none';
+                renderExample(Math.floor(Math.random() * QUERIES.length));
+            }).catch(function () {
+                if (loadingEl) loadingEl.textContent = 'Could not load track data.';
+            });
+        });
+    })();
+    </script>
+
+    <script>
+    (function () {
+        'use strict';
+        var musicBtn = document.getElementById('tabBtnMusic');
+        var financeBtn = document.getElementById('tabBtnFinance');
+        var musicPanel = document.getElementById('tabPanelMusic');
+        var financePanel = document.getElementById('tabPanelFinance');
+        if (!musicBtn || !financeBtn) return;
+
+        var financeInited = false;
+
+        musicBtn.addEventListener('click', function () {
+            musicBtn.classList.add('active');
+            financeBtn.classList.remove('active');
+            musicPanel.style.display = '';
+            financePanel.style.display = 'none';
+        });
+        financeBtn.addEventListener('click', function () {
+            financeBtn.classList.add('active');
+            musicBtn.classList.remove('active');
+            financePanel.style.display = '';
+            musicPanel.style.display = 'none';
+            if (!financeInited && window.initFinanceGraph) {
+                financeInited = true;
+                window.initFinanceGraph();
+            }
+        });
+    })();
+    </script>
+
+    <script>
+    (function () {
+        'use strict';
+
+        var SVG_NS = 'http://www.w3.org/2000/svg';
+        var XLINK_NS = 'http://www.w3.org/1999/xlink';
+        var DATA_URL = 'companies_graph.json';
+
+        var GOLDEN_ANGLE = 137.50776405003785 * Math.PI / 180;
+        var CENTER_R = 54;
+        var RING_BASE_MIN = 90;
+        var RING_GROWTH = 37;
+        var MIN_NEIGHBOR_R = 14, MAX_NEIGHBOR_R = 32;
+        var MIN_SIZE = 420;
+        var MIN_GAP_PX = 83.5;
+        var SEARCH_RESULT_LIMIT = 40;
+        var LOGO_STORAGE_PREFIX = 'financeLogo:';
+        var LOGO_DISPATCH_MS = 90;
+
+        var COMPANIES = null, QUERIES = null;
+        var currentIndex = 0;
+        var logoCache = {};
+        var logoClipCounter = 0;
+        var logoQueue = [];
+        var logoDispatching = false;
+
+        var svgEl, queryCardEl, detailEl, regenBtn, searchToggleBtn,
+            searchBoxEl, searchInputEl, searchResultsEl, canvasBoxEl, loadingEl;
+
+        function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+
+        function fmtMoney(v) {
+            if (v == null || isNaN(v)) return '—';
+            if (Math.abs(v) >= 1e12) return '$' + (v / 1e12).toFixed(2) + 'T';
+            if (Math.abs(v) >= 1e9) return '$' + (v / 1e9).toFixed(2) + 'B';
+            if (Math.abs(v) >= 1e6) return '$' + (v / 1e6).toFixed(1) + 'M';
+            return '$' + Math.round(v).toLocaleString();
+        }
+        function fmtPct(v) { return (v == null || isNaN(v)) ? '—' : (v * 100).toFixed(1) + '%'; }
+        function fmtInt(v) { return (v == null || isNaN(v)) ? '—' : Math.round(v).toLocaleString(); }
+
+        function getPersistedLogo(id) {
+            try {
+                var v = localStorage.getItem(LOGO_STORAGE_PREFIX + id);
+                return v === null ? undefined : JSON.parse(v);
+            } catch (e) { return undefined; }
+        }
+        function setPersistedLogo(id, url) {
+            try { localStorage.setItem(LOGO_STORAGE_PREFIX + id, JSON.stringify(url)); } catch (e) {}
+        }
+        function pumpLogoQueue() {
+            if (logoDispatching) return;
+            logoDispatching = true;
+            (function next() {
+                if (logoQueue.length === 0) { logoDispatching = false; return; }
+                (logoQueue.shift())();
+                setTimeout(next, LOGO_DISPATCH_MS);
+            })();
+        }
+        function enqueueLogoFetch(taskFn) {
+            return new Promise(function (resolve) {
+                logoQueue.push(function () { taskFn().then(resolve); });
+                pumpLogoQueue();
+            });
+        }
+        function fetchLogo(ticker) {
+            if (logoCache[ticker]) return logoCache[ticker];
+            var persisted = getPersistedLogo(ticker);
+            if (persisted !== undefined) {
+                var resolved = Promise.resolve(persisted);
+                logoCache[ticker] = resolved;
+                return resolved;
+            }
+            var domain = COMPANIES[ticker] && COMPANIES[ticker].domain;
+            if (!domain) { logoCache[ticker] = Promise.resolve(null); return logoCache[ticker]; }
+            var p = enqueueLogoFetch(function () {
+                return fetch('https://unavatar.io/' + encodeURIComponent(domain))
+                    .then(function (r) { if (!r.ok) throw new Error('bad'); return r.blob(); })
+                    .then(function () { return 'https://unavatar.io/' + encodeURIComponent(domain); })
+                    .catch(function () { return null; });
+            }).then(function (url) {
+                setPersistedLogo(ticker, url);
+                return url;
+            }).catch(function () {
+                delete logoCache[ticker];
+                return null;
+            });
+            logoCache[ticker] = p;
+            return p;
+        }
+
+        function scaleRadius(val, minV, maxV) {
+            if (maxV === minV) return (MIN_NEIGHBOR_R + MAX_NEIGHBOR_R) / 2;
+            var t = (val - minV) / (maxV - minV);
+            return MIN_NEIGHBOR_R + t * (MAX_NEIGHBOR_R - MIN_NEIGHBOR_R);
+        }
+
+        function computeLayout(n, containerPx) {
+            var ringBase = RING_BASE_MIN, size, maxR;
+            for (var iter = 0; iter < 60; iter++) {
+                maxR = ringBase + RING_GROWTH * Math.sqrt(Math.max(0, n - 1));
+                size = Math.max(MIN_SIZE, Math.ceil((maxR + MAX_NEIGHBOR_R + 24) * 2));
+                var scale = containerPx / size;
+                var edgeGapPx = (ringBase - CENTER_R - MAX_NEIGHBOR_R * 0.5) * scale;
+                if (edgeGapPx >= MIN_GAP_PX) break;
+                ringBase += 5;
+            }
+            return { size: size, cx: size / 2, cy: size / 2, ringBase: ringBase };
+        }
+
+        function placeholderBubbleMarkup(cx, cy, r, ringClass) {
+            return '<circle class="bubble-placeholder" cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="' + r.toFixed(1) + '" fill="#eee" style="pointer-events:none"/>' +
+                '<circle class="' + ringClass + '" cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="' + r.toFixed(1) + '" style="pointer-events:none"/>' +
+                '<circle class="bubble-hit" cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="' + r.toFixed(1) + '" fill="transparent"/>';
+        }
+
+        function buildGraphSvg(q) {
+            var neighbors = q.neighbors;
+            var containerPx = (canvasBoxEl && canvasBoxEl.clientWidth) || 700;
+            var layout = computeLayout(neighbors.length, containerPx);
+            var cx = layout.cx, cy = layout.cy, ringBase = layout.ringBase;
+            var caps = neighbors.map(function (n) { return COMPANIES[n.id].marketCap; });
+            var minCap = Math.min.apply(null, caps), maxCap = Math.max.apply(null, caps);
+            var maxW = Math.max.apply(null, neighbors.map(function (n) { return n.weight; }));
+
+            var positions = neighbors.map(function (n, i) {
+                var angle = i * GOLDEN_ANGLE;
+                var r = ringBase + RING_GROWTH * Math.sqrt(i);
+                return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
+            });
+
+            var defs = ['<marker id="fin-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">' +
+                '<path d="M0,0 L10,5 L0,10 z" fill="#C75B8C"/></marker>'];
+            var edgeMarkup = [];
+            var radii = [];
+
+            neighbors.forEach(function (n, i) {
+                var p = positions[i];
+                var wNorm = maxW > 0 ? n.weight / maxW : 0;
+                var strokeW = (0.5 + Math.sqrt(wNorm) * 1.8).toFixed(2);
+                var opacity = (0.12 + wNorm * 0.28).toFixed(2);
+                edgeMarkup.push('<line class="bubble-edge-hit" x1="' + cx + '" y1="' + cy + '" x2="' + p.x.toFixed(1) + '" y2="' + p.y.toFixed(1) +
+                    '" data-to-idx="' + i + '"/>');
+                edgeMarkup.push('<line class="bubble-edge" x1="' + cx + '" y1="' + cy + '" x2="' + p.x.toFixed(1) + '" y2="' + p.y.toFixed(1) +
+                    '" stroke-width="' + strokeW + '" stroke-opacity="' + opacity + '" marker-end="url(#fin-arrow)" data-to-idx="' + i + '"/>');
+            });
+
+            var body = [];
+            body.push('<g class="bubble-center" data-kind="query" tabindex="0">' +
+                placeholderBubbleMarkup(cx, cy, CENTER_R, 'bubble-center-ring') + '</g>');
+
+            neighbors.forEach(function (n, i) {
+                var p = positions[i];
+                var r = scaleRadius(COMPANIES[n.id].marketCap, minCap, maxCap);
+                radii.push(r);
+                body.push('<g class="bubble-neighbor" data-kind="neighbor" data-idx="' + i + '" tabindex="0">' +
+                    placeholderBubbleMarkup(p.x, p.y, r, 'bubble-neighbor-ring') + '</g>');
+            });
+
+            var markup = '<defs>' + defs.join('') + '</defs>' +
+                '<g class="bubble-edges">' + edgeMarkup.join('') + '</g>' +
+                body.join('\n');
+            return { size: layout.size, cx: cx, cy: cy, positions: positions, radii: radii, markup: markup };
+        }
+
+        function applyLogo(groupEl, cx, cy, r, url) {
+            var defs = svgEl.querySelector('defs');
+            if (!defs || !groupEl) return;
+            var clipId = 'fin-logo-clip-' + (logoClipCounter++);
+            var clip = document.createElementNS(SVG_NS, 'clipPath');
+            clip.setAttribute('id', clipId);
+            var cc = document.createElementNS(SVG_NS, 'circle');
+            cc.setAttribute('cx', cx.toFixed(1)); cc.setAttribute('cy', cy.toFixed(1)); cc.setAttribute('r', r.toFixed(1));
+            clip.appendChild(cc);
+            defs.appendChild(clip);
+
+            var img = document.createElementNS(SVG_NS, 'image');
+            img.setAttributeNS(XLINK_NS, 'href', url);
+            img.setAttribute('href', url);
+            img.setAttribute('x', (cx - r).toFixed(1));
+            img.setAttribute('y', (cy - r).toFixed(1));
+            img.setAttribute('width', (r * 2).toFixed(1));
+            img.setAttribute('height', (r * 2).toFixed(1));
+            img.setAttribute('preserveAspectRatio', 'xMidYMid slice');
+            img.setAttribute('clip-path', 'url(#' + clipId + ')');
+            img.style.pointerEvents = 'none';
+
+            var bg = document.createElementNS(SVG_NS, 'circle');
+            bg.setAttribute('cx', cx.toFixed(1)); bg.setAttribute('cy', cy.toFixed(1)); bg.setAttribute('r', r.toFixed(1));
+            bg.setAttribute('fill', '#ffffff');
+            bg.style.pointerEvents = 'none';
+
+            var placeholder = groupEl.querySelector('circle.bubble-placeholder');
+            groupEl.insertBefore(img, groupEl.firstChild);
+            groupEl.insertBefore(bg, img);
+            if (placeholder) placeholder.parentNode.removeChild(placeholder);
+        }
+
+        function loadLogosForCurrentExample(q, built) {
+            var myIndex = currentIndex;
+            var centerG = svgEl.querySelector('.bubble-center');
+            fetchLogo(q.id).then(function (url) {
+                if (currentIndex !== myIndex || !url || !centerG) return;
+                applyLogo(centerG, built.cx, built.cy, CENTER_R, url);
+            });
+            q.neighbors.forEach(function (n, i) {
+                fetchLogo(n.id).then(function (url) {
+                    if (currentIndex !== myIndex || !url) return;
+                    var g = svgEl.querySelector('.bubble-neighbor[data-idx="' + i + '"]');
+                    if (!g) return;
+                    applyLogo(g, built.positions[i].x, built.positions[i].y, built.radii[i], url);
+                });
+            });
+        }
+
+        function detailRow(label, value) {
+            return '<div class="bubble-detail-row"><span class="bubble-detail-label">' + label +
+                '</span><span class="bubble-detail-value">' + value + '</span></div>';
+        }
+
+        function renderQueryCard(ticker) {
+            var c = COMPANIES[ticker];
+            queryCardEl.innerHTML =
+                '<div class="finance-query-logo" id="financeQueryLogo"></div>' +
+                '<div class="finance-query-info">' +
+                    '<div class="finance-query-name">' + esc(c.name) + ' <span class="finance-query-ticker">(' + esc(ticker) + ')</span></div>' +
+                    '<div class="finance-query-sector">' + esc(c.sector) + (c.industry ? ' &middot; ' + esc(c.industry) : '') + '</div>' +
+                '</div>';
+            fetchLogo(ticker).then(function (url) {
+                if (!url) return;
+                var el = document.getElementById('financeQueryLogo');
+                if (el) el.innerHTML = '<img src="' + esc(url) + '" alt="">';
+            });
+        }
+
+        function showNodeDetail(ticker, weightFromQuery) {
+            var c = COMPANIES[ticker];
+            var html = '<div class="finance-detail-logo" id="financeDetailLogo"></div>';
+            html += '<div class="finance-detail-body">';
+            html += '<div class="bubble-detail-name">' + esc(c.name) + ' (' + esc(ticker) + ')</div>';
+            html += '<div class="bubble-detail-rows">' +
+                detailRow('Sector', esc(c.sector)) +
+                detailRow('Market cap', fmtMoney(c.marketCap)) +
+                detailRow('Revenue', fmtMoney(c.totalRevenue)) +
+                detailRow('Profit margin', fmtPct(c.profitMargins)) +
+                detailRow('Revenue growth', fmtPct(c.revenueGrowth)) +
+                detailRow('Employees', fmtInt(c.fullTimeEmployees)) +
+                '</div>';
+            html += '<div class="bubble-detail-target">Price/Sales (target): ' + c.priceToSales.toFixed(2) +
+                ' &mdash; rank ' + c.rank + ' of ' + Object.keys(COMPANIES).length + '</div>';
+            if (weightFromQuery != null) {
+                html += '<div class="bubble-detail-weight">\\(\\alpha = ' + weightFromQuery.toFixed(4) + '\\) (attention from query)</div>';
+            }
+            html += '</div>';
+            detailEl.innerHTML = html;
+            detailEl.style.display = '';
+            fetchLogo(ticker).then(function (url) {
+                if (!url) return;
+                var el = document.getElementById('financeDetailLogo');
+                if (el) el.innerHTML = '<img src="' + esc(url) + '" alt="">';
+            });
+            if (window.MathJax && window.MathJax.typesetPromise) {
+                window.MathJax.typesetPromise([detailEl]).catch(function () {});
+            }
+        }
+
+        function showEdgeDetail(fromTicker, toTicker, wOut, wIn) {
+            var a = COMPANIES[fromTicker], b = COMPANIES[toTicker];
+            var html = '<div class="finance-edge-detail">';
+            html += '<div class="bubble-detail-name">' + esc(a.name) + ' (' + esc(fromTicker) + ') &harr; ' +
+                esc(b.name) + ' (' + esc(toTicker) + ')</div>';
+            html += '<div class="bubble-detail-rows">' +
+                detailRow(esc(fromTicker) + ' &rarr; ' + esc(toTicker), '\\(\\alpha = ' + wOut.toFixed(4) + '\\)') +
+                detailRow(esc(toTicker) + ' &rarr; ' + esc(fromTicker), '\\(\\alpha = ' + wIn.toFixed(4) + '\\)') +
+                '</div>';
+            html += '<div class="bubble-detail-weight">Attention is asymmetric: how much ' + esc(fromTicker) +
+                ' draws on ' + esc(toTicker) + " isn't the same as the reverse.</div>";
+            html += '</div>';
+            detailEl.innerHTML = html;
+            detailEl.style.display = '';
+            if (window.MathJax && window.MathJax.typesetPromise) {
+                window.MathJax.typesetPromise([detailEl]).catch(function () {});
+            }
+        }
+
+        function hideDetail() {
+            detailEl.style.display = 'none';
+            detailEl.innerHTML = '';
+        }
+
+        function wireClicks(q) {
+            var centerG = svgEl.querySelector('.bubble-center');
+            if (centerG) {
+                centerG.addEventListener('click', function () { showNodeDetail(q.id, null); });
+                centerG.addEventListener('keydown', function (e) { if (e.key === 'Enter') showNodeDetail(q.id, null); });
+            }
+            svgEl.querySelectorAll('.bubble-neighbor').forEach(function (g) {
+                var idx = parseInt(g.getAttribute('data-idx'), 10);
+                var n = q.neighbors[idx];
+                g.addEventListener('click', function () { showNodeDetail(n.id, n.weight); });
+                g.addEventListener('keydown', function (e) { if (e.key === 'Enter') showNodeDetail(n.id, n.weight); });
+            });
+            svgEl.querySelectorAll('.bubble-edge-hit').forEach(function (hit) {
+                var idx = parseInt(hit.getAttribute('data-to-idx'), 10);
+                var n = q.neighbors[idx];
+                hit.addEventListener('click', function () { showEdgeDetail(q.id, n.id, n.weight, n.reverse_weight); });
+            });
+        }
+
+        function searchResultRow(ticker, idx) {
+            var c = COMPANIES[ticker];
+            return '<div class="bubble-list-row" data-qidx="' + idx + '" tabindex="0">' +
+                '<img class="bubble-list-art fin-logo-img" data-ticker="' + esc(ticker) + '" alt="">' +
+                '<div class="bubble-list-info">' +
+                    '<div class="bubble-list-name">' + esc(c.name) + '</div>' +
+                    '<div class="bubble-list-artist">' + esc(ticker) + ' &middot; ' + esc(c.sector) + '</div>' +
+                '</div>' +
+                '<div class="bubble-list-pop">' + fmtMoney(c.marketCap) + '</div>' +
+            '</div>';
+        }
+
+        function renderSearchResults() {
+            var q = searchInputEl.value.trim().toLowerCase();
+            if (!q) {
+                searchResultsEl.innerHTML = '<div class="bubble-search-empty">Type a company name or ticker to search all 515 companies.</div>';
+                return;
+            }
+            var matches = [];
+            for (var i = 0; i < QUERIES.length; i++) {
+                var ticker = QUERIES[i].id;
+                var c = COMPANIES[ticker];
+                if (ticker.toLowerCase().indexOf(q) !== -1 || c.name.toLowerCase().indexOf(q) !== -1) {
+                    matches.push(i);
+                    if (matches.length >= 400) break;
+                }
+            }
+            matches.sort(function (a, b) { return COMPANIES[QUERIES[b].id].marketCap - COMPANIES[QUERIES[a].id].marketCap; });
+            matches = matches.slice(0, SEARCH_RESULT_LIMIT);
+            if (matches.length === 0) {
+                searchResultsEl.innerHTML = '<div class="bubble-search-empty">No matching companies.</div>';
+                return;
+            }
+            searchResultsEl.innerHTML = matches.map(function (idx) { return searchResultRow(QUERIES[idx].id, idx); }).join('');
+            searchResultsEl.querySelectorAll('.bubble-list-row').forEach(function (row) {
+                var idx = parseInt(row.getAttribute('data-qidx'), 10);
+                row.addEventListener('click', function () { selectQuery(idx); });
+                row.addEventListener('keydown', function (e) { if (e.key === 'Enter') selectQuery(idx); });
+            });
+            searchResultsEl.querySelectorAll('.fin-logo-img').forEach(function (img) {
+                var ticker = img.getAttribute('data-ticker');
+                fetchLogo(ticker).then(function (url) { if (url) img.src = url; });
+            });
+        }
+
+        function closeSearch() {
+            searchBoxEl.style.display = 'none';
+            canvasBoxEl.style.display = '';
+            searchInputEl.value = '';
+            if (searchToggleBtn) searchToggleBtn.textContent = 'Search';
+        }
+
+        function toggleSearch() {
+            var isOpen = searchBoxEl.style.display !== 'none';
+            if (isOpen) {
+                closeSearch();
+            } else {
+                canvasBoxEl.style.display = 'none';
+                searchBoxEl.style.display = '';
+                searchToggleBtn.textContent = 'Show graph';
+                renderSearchResults();
+                searchInputEl.focus();
+            }
+        }
+
+        function selectQuery(idx) {
+            closeSearch();
+            renderExample(idx);
+        }
+
+        function renderExample(idx) {
+            currentIndex = idx;
+            var q = QUERIES[idx];
+            hideDetail();
+            renderQueryCard(q.id);
+            var built = buildGraphSvg(q);
+            svgEl.setAttribute('viewBox', '0 0 ' + built.size + ' ' + built.size);
+            svgEl.innerHTML = built.markup;
+            wireClicks(q);
+            loadLogosForCurrentExample(q, built);
+        }
+
+        function regenerate() {
+            if (!QUERIES || QUERIES.length < 2) return;
+            var next;
+            do { next = Math.floor(Math.random() * QUERIES.length); } while (next === currentIndex);
+            closeSearch();
+            renderExample(next);
+        }
+
+        function init() {
+            svgEl = document.getElementById('financeSvg');
+            queryCardEl = document.getElementById('financeQueryCard');
+            canvasBoxEl = document.querySelector('#financeDiagram .bubble-canvas-box');
+            detailEl = document.getElementById('financeDetail');
+            regenBtn = document.getElementById('financeRegenerate');
+            searchToggleBtn = document.getElementById('financeSearchToggle');
+            searchBoxEl = document.getElementById('financeSearch');
+            searchInputEl = document.getElementById('financeSearchInput');
+            searchResultsEl = document.getElementById('financeSearchResults');
+            loadingEl = document.getElementById('financeLoading');
+            if (!svgEl || !detailEl) return;
+
+            if (regenBtn) regenBtn.addEventListener('click', regenerate);
+            if (searchToggleBtn) searchToggleBtn.addEventListener('click', toggleSearch);
+            if (searchInputEl) searchInputEl.addEventListener('input', renderSearchResults);
+
+            fetch(DATA_URL).then(function (r) { return r.json(); }).then(function (data) {
+                COMPANIES = data.companies;
+                QUERIES = data.queries;
+                if (loadingEl) loadingEl.style.display = 'none';
+                renderExample(Math.floor(Math.random() * QUERIES.length));
+            }).catch(function () {
+                if (loadingEl) loadingEl.textContent = 'Could not load company data.';
+            });
+        }
+
+        window.initFinanceGraph = init;
+    })();
+    </script>
+
+    <script>
+    (function () {
+        'use strict';
+        var PASSWORD = 'cluster';
+        var STORAGE_KEY = 'blog90226-unlocked';
+        var gate = document.getElementById('passwordGate');
+        var content = document.getElementById('protectedContent');
+        var input = document.getElementById('passwordInput');
+        var error = document.getElementById('passwordError');
+        var submit = document.getElementById('passwordSubmit');
+
+        function unlock() {
+            gate.style.display = 'none';
+            content.style.display = '';
+            try { sessionStorage.setItem(STORAGE_KEY, '1'); } catch (e) { /* ignore */ }
+        }
+
+        function tryUnlock() {
+            if (input.value === PASSWORD) {
+                unlock();
+            } else {
+                error.textContent = 'Incorrect password.';
+                input.value = '';
+                input.focus();
+            }
+        }
+
+        submit.addEventListener('click', tryUnlock);
+        input.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') tryUnlock();
+        });
+
+        try {
+            if (sessionStorage.getItem(STORAGE_KEY) === '1') unlock();
+        } catch (e) { /* ignore */ }
+    })();
+    </script>
+<script>
+window.addEventListener("load", function(){
+  setTimeout(function(){
+    document.getElementById("tabBtnFinance").click();
+    setTimeout(function(){
+      var results = {};
+      results.panelVisible = getComputedStyle(document.getElementById("tabPanelFinance")).display !== "none";
+      var svg = document.getElementById("financeSvg");
+      results.hasCenter = !!svg.querySelector(".bubble-center");
+      results.neighborCount = svg.querySelectorAll(".bubble-neighbor").length;
+      results.edgeCount = svg.querySelectorAll("line.bubble-edge").length;
+      results.hasQueryCard = document.getElementById("financeQueryCard").innerHTML.length > 0;
+
+      // click a neighbor node
+      var g = svg.querySelector(".bubble-neighbor");
+      var hitC = g.querySelector("circle.bubble-hit");
+      var r = hitC.getBoundingClientRect();
+      var hit = document.elementFromPoint(r.left+r.width/2, r.top+r.height/2);
+      hit.dispatchEvent(new MouseEvent("click",{bubbles:true,cancelable:true,clientX:r.left+r.width/2,clientY:r.top+r.height/2}));
+
+      setTimeout(function(){
+        var detail = document.getElementById("financeDetail");
+        results.nodeDetailShown = getComputedStyle(detail).display !== "none";
+        results.nodeDetailHasRank = detail.innerHTML.indexOf("rank") !== -1;
+        results.nodeDetailHasAlpha = detail.innerHTML.indexOf("mjx") !== -1 || detail.innerHTML.indexOf("alpha") !== -1;
+
+        // click an edge
+        var edgeHit = svg.querySelector("line.bubble-edge-hit");
+        var r2 = edgeHit.getBoundingClientRect();
+        var midX = (r2.left+r2.right)/2, midY = (r2.top+r2.bottom)/2;
+        var hitEl = document.elementFromPoint(midX, midY);
+        results.edgeHitFound = hitEl === edgeHit || (hitEl && hitEl.classList.contains("bubble-edge-hit"));
+        if (hitEl) hitEl.dispatchEvent(new MouseEvent("click", {bubbles:true}));
+
+        setTimeout(function(){
+          results.edgeDetailHTML = document.getElementById("financeDetail").innerHTML.substring(0, 300);
+          document.title = JSON.stringify(results);
+        }, 400);
+      }, 400);
+    }, 2500);
+  }, 500);
+});
+</script><script>
+window.addEventListener("load", function(){
+  setTimeout(function(){
+    document.getElementById("tabBtnFinance").click();
+    setTimeout(function(){
+      var svg = document.getElementById("financeSvg");
+      var total = svg.querySelectorAll(".bubble-center, .bubble-neighbor").length;
+      var withImg = svg.querySelectorAll(".bubble-center image, .bubble-neighbor image").length;
+      document.title = JSON.stringify({total: total, withLogo: withImg});
+    }, 6000);
+  }, 500);
+});
+</script></body>
+</html>
