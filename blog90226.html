@@ -194,13 +194,16 @@
         // Grows the center-to-ring radius until the nearest neighbor sits at
         // least ~1cm (in real rendered pixels) from the query bubble, given
         // the canvas's current on-screen width (the <svg> scales to fill it).
-        function computeLayout(n, containerPx) {
+        function computeLayout(n, containerPx, nearestNeighborR) {
             var ringBase = RING_BASE_MIN, size, maxR;
             for (var iter = 0; iter < 60; iter++) {
                 maxR = ringBase + RING_GROWTH * Math.sqrt(Math.max(0, n - 1));
                 size = Math.max(MIN_SIZE, Math.ceil((maxR + MAX_NEIGHBOR_R + 24) * 2));
                 var scale = containerPx / size;
-                if (ringBase * scale >= MIN_GAP_PX) break;
+                // the gap that matters is between the EDGES of the query bubble
+                // and its nearest neighbor, not their centers.
+                var edgeGapPx = (ringBase - CENTER_R - nearestNeighborR) * scale;
+                if (edgeGapPx >= MIN_GAP_PX) break;
                 ringBase += 5;
             }
             return { size: size, cx: size / 2, cy: size / 2, ringBase: ringBase };
@@ -215,10 +218,14 @@
         function buildBubbleSvg(q) {
             var neighbors = q.neighbors;
             var containerPx = (canvasBoxEl && canvasBoxEl.clientWidth) || 700;
-            var layout = computeLayout(neighbors.length, containerPx);
-            var cx = layout.cx, cy = layout.cy, ringBase = layout.ringBase;
             var pops = neighbors.map(function (n) { return TRACKS[n.id].popularity; });
             var minPop = Math.min.apply(null, pops), maxPop = Math.max.apply(null, pops);
+            // neighbors are pre-sorted by attention weight, so index 0 is always
+            // the one placed nearest the query -- its own radius (which depends
+            // on its popularity, not its weight) has to be accounted for too.
+            var nearestR = neighbors.length > 0 ? scaleRadius(TRACKS[neighbors[0].id].popularity, minPop, maxPop) : 0;
+            var layout = computeLayout(neighbors.length, containerPx, nearestR);
+            var cx = layout.cx, cy = layout.cy, ringBase = layout.ringBase;
 
             var positions = neighbors.map(function (n, i) {
                 var angle = i * GOLDEN_ANGLE;
