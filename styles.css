@@ -440,8 +440,11 @@ footer {
     border: 1.5px solid #E8A0BF;
     border-radius: 10px;
     padding: 20px 24px;
-    margin: 1.5em 0 2em;
+    margin: 1.5em auto 2em;
     background: #FFFBFD;
+    width: fit-content;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 .algo-title {
@@ -557,6 +560,8 @@ footer {
 }
 
 .tab-btn {
+    -webkit-appearance: none;
+    appearance: none;
     font-family: 'Crimson Text', serif;
     font-size: 1em;
     padding: 8px 18px;
@@ -566,7 +571,13 @@ footer {
     color: #888;
     cursor: pointer;
     margin-bottom: -1px;
+    outline: none;
     transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.tab-btn:focus-visible {
+    color: #C75B8C;
+    border-bottom-color: #F9D5E5;
 }
 
 .tab-btn:hover {

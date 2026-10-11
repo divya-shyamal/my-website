@@ -52,7 +52,8 @@
         </div>
         <p>In my experiments, I found that these weights this soft retrieval was quite good - the kernel regression estimate that resulted from it was better than LGBM in some cases (in particular the example below), and very predictive.</p>
         <p>Here, we demonstrate this algorithm on a Spotify dataset, where the goal is to predict the popularity of a song. Our TFM of choice is TabICLv2. We found that the average <a href="https://en.wikipedia.org/wiki/R%C3%A9nyi_entropy#Special_cases" target="_blank" rel="noopener">IPR</a> was \(11.86\) (with a context size of \(5000\)), showing that the TFM identifies incredibly tight neighborhoods. This phenomenon is not particular to TabICLv2.</p>
-        <p>We also demonstrate on a dataset on \(515\) companies, where we predict valuation. </p>
+
+        <p>We also try this on a financial dataset of 515 companies, where we predict valuation multiple. (I cheated a bit here, I had Claude choose a target and train a LGBM model much better than baseline. I then used the feature engineering it produced for TabICLv2). Since the dataset was very small, for each point we give the rest 514 points as context, allowing us to create a full graph across the companies.</p>
 
         <div class="tab-bar">
             <button class="tab-btn active" id="tabBtnMusic" type="button">Music</button>
@@ -121,12 +122,12 @@
         var DATA_URL = 'bubble_data.json';
 
         var GOLDEN_ANGLE = 137.50776405003785 * Math.PI / 180;
-        var CENTER_R = 54;         // the query bubble's own radius
-        var RING_BASE_MIN = 90;    // starting point before enforcing min spacing
-        var RING_GROWTH = 37;
-        var MIN_NEIGHBOR_R = 14, MAX_NEIGHBOR_R = 32;
-        var MIN_SIZE = 420;
-        var MIN_GAP_PX = 83.5;     // ~2.2cm at 96dpi, measured at the canvas's actual rendered width
+        var CENTER_R = 40;         // the query bubble's own radius
+        var RING_BASE_MIN = 66;    // starting point before enforcing min spacing
+        var RING_GROWTH = 27;
+        var MIN_NEIGHBOR_R = 10, MAX_NEIGHBOR_R = 24;
+        var MIN_SIZE = 320;
+        var MIN_GAP_PX = 62;       // ~1.6cm at 96dpi, measured at the canvas's actual rendered width
         var SEARCH_RESULT_LIMIT = 40;
 
         var TRACKS = null, QUERIES = null;
@@ -529,17 +530,17 @@
         var DATA_URL = 'companies_graph.json';
 
         var GOLDEN_ANGLE = 137.50776405003785 * Math.PI / 180;
-        var CENTER_R = 54;
-        var RING_BASE_MIN = 90;
-        var RING_GROWTH = 37;
-        var MIN_NEIGHBOR_R = 14, MAX_NEIGHBOR_R = 32;
-        var MIN_SIZE = 420;
-        var MIN_GAP_PX = 83.5;
+        var CENTER_R = 40;
+        var RING_BASE_MIN = 66;
+        var RING_GROWTH = 27;
+        var MIN_NEIGHBOR_R = 10, MAX_NEIGHBOR_R = 24;
+        var MIN_SIZE = 320;
+        var MIN_GAP_PX = 62;
         var SEARCH_RESULT_LIMIT = 40;
 
-        var OVERVIEW_MIN_R = 3, OVERVIEW_MAX_R = 13;
-        var OVERVIEW_RING_GROWTH = 15.5;
-        var OVERVIEW_RING_BASE = 30; // keeps the first few nodes from overlapping at the spiral's origin
+        var OVERVIEW_MIN_R = 2.5, OVERVIEW_MAX_R = 10;
+        var OVERVIEW_RING_GROWTH = 11.5;
+        var OVERVIEW_RING_BASE = 22; // keeps the first few nodes from overlapping at the spiral's origin
 
         var COMPANIES = null, QUERIES = null;
         var tickerToQueryIdx = null;
@@ -719,13 +720,17 @@
             var size = Math.ceil((maxR + OVERVIEW_MAX_R + 20) * 2);
             var cx = size / 2, cy = size / 2;
 
-            var allTickers = QUERIES.map(function (q) { return q.id; });
+            // Sort by in-degree descending so the most-cited companies sit
+            // near the spiral's center and the least important are pushed
+            // to the periphery.
+            var allTickers = QUERIES.map(function (q) { return q.id; })
+                .sort(function (a, b) { return COMPANIES[b].inDegree - COMPANIES[a].inDegree; });
             var nodeByTicker = {};
-            QUERIES.forEach(function (q, i) {
+            allTickers.forEach(function (ticker, i) {
                 var angle = i * GOLDEN_ANGLE;
                 var r0 = OVERVIEW_RING_BASE + OVERVIEW_RING_GROWTH * Math.sqrt(i);
-                var rad = scaleLinear(COMPANIES[q.id].inDegree, inDegMin, inDegMax, OVERVIEW_MIN_R, OVERVIEW_MAX_R);
-                nodeByTicker[q.id] = { x: cx + r0 * Math.cos(angle), y: cy + r0 * Math.sin(angle), r: rad };
+                var rad = scaleLinear(COMPANIES[ticker].inDegree, inDegMin, inDegMax, OVERVIEW_MIN_R, OVERVIEW_MAX_R);
+                nodeByTicker[ticker] = { x: cx + r0 * Math.cos(angle), y: cy + r0 * Math.sin(angle), r: rad };
             });
 
             var pairs = buildPairs(allTickers, nodeByTicker);
@@ -733,9 +738,11 @@
             var edgeMarkup = pairs.map(function (p) {
                 var a = nodeByTicker[p.a], b = nodeByTicker[p.b];
                 var w = Math.max(p.wAB || 0, p.wBA || 0);
-                var opacity = (0.04 + (w / maxW) * 0.12).toFixed(2);
+                var wNorm = w / maxW;
+                var strokeW = (0.3 + Math.sqrt(wNorm) * 1.0).toFixed(2);
+                var opacity = (0.04 + wNorm * 0.14).toFixed(2);
                 return '<line class="bubble-edge" x1="' + a.x.toFixed(1) + '" y1="' + a.y.toFixed(1) +
-                    '" x2="' + b.x.toFixed(1) + '" y2="' + b.y.toFixed(1) + '" stroke-width="0.5" stroke-opacity="' + opacity + '"/>';
+                    '" x2="' + b.x.toFixed(1) + '" y2="' + b.y.toFixed(1) + '" stroke-width="' + strokeW + '" stroke-opacity="' + opacity + '"/>';
             });
 
             var body = [];
@@ -820,7 +827,7 @@
                 detailRow('Employees', fmtInt(c.fullTimeEmployees)) +
                 detailRow('In-degree (times cited as a top neighbor)', c.inDegree) +
                 '</div>';
-            html += '<div class="bubble-detail-target">Price/Sales (target): ' + c.priceToSales.toFixed(2) +
+            html += '<div class="bubble-detail-target">Valuation multiple: ' + c.priceToSales.toFixed(2) +
                 ' &mdash; rank ' + c.rank + ' of ' + Object.keys(COMPANIES).length + '</div>';
             if (weightFromQuery != null) {
                 html += '<div class="bubble-detail-weight">\\(\\alpha = ' + weightFromQuery.toFixed(4) + '\\) (attention from query)</div>';
@@ -840,12 +847,9 @@
             html += '<div class="bubble-detail-name">' + esc(a.name) + ' (' + esc(tickerA) + ') ' + arrow + ' ' +
                 esc(b.name) + ' (' + esc(tickerB) + ')</div>';
             html += '<div class="bubble-detail-rows">' +
-                detailRow(esc(tickerA) + ' &rarr; ' + esc(tickerB) + (aToB ? ' &#9733;' : ''),
-                    '\\(\\alpha = ' + wAB.toFixed(4) + '\\)') +
-                detailRow(esc(tickerB) + ' &rarr; ' + esc(tickerA) + (bToA ? ' &#9733;' : ''),
-                    '\\(\\alpha = ' + wBA.toFixed(4) + '\\)') +
+                detailRow(esc(tickerA) + ' &rarr; ' + esc(tickerB), '\\(\\alpha = ' + wAB.toFixed(4) + '\\)') +
+                detailRow(esc(tickerB) + ' &rarr; ' + esc(tickerA), '\\(\\alpha = ' + wBA.toFixed(4) + '\\)') +
                 '</div>';
-            html += '<div class="bubble-detail-weight">&#9733; = among that company&rsquo;s own top-IPR neighbors</div>';
             html += '</div>';
             detailEl.innerHTML = html;
             detailEl.style.display = '';
