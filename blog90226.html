@@ -11,16 +11,423 @@
 
 </head>
 <body>
+    <div id="passwordGate" class="password-gate">
+        <div class="password-gate-box">
+            <p class="password-gate-label">This post is password protected.</p>
+            <input type="password" id="passwordInput" class="password-gate-input" placeholder="Password" autocomplete="off">
+            <button class="sim-btn" id="passwordSubmit">Unlock</button>
+            <p class="password-gate-error" id="passwordError"></p>
+        </div>
+    </div>
+
+    <div id="protectedContent" style="display: none;">
     <header>
         <h1>On tabular foundation models</h1>
     </header>
 
     <main>
-        <p>I've been investigating tabular foundation models, and have been pleasantly surprised to produce empircal evidence of interpretability. I would like to write about that in this post!</p>
+        <p>I've been investigating tabular foundation models, which I have found to be very interesting conceptually. Think about tabular foundation models as ChatGPT for datasets. ChatGPT seems to know everything that natural language has to offer because it is a transformer-based architecture thrown at all the textual data we have - all of the internet, books, etc. Therefore, it is extraoardinarily good at next-word completion. Tabular foundation models are similar: we throw a transformer-based architecture at billions of synthetically-generated datasets. Therefore, when presented with a new dataset, it is very good at coming up with predictions for an out-of-sample point.</p>
+
+        <p>Tabular foundation models come from a <a href="https://arxiv.org/pdf/2112.10510">Bayesian inference perspective</a>. However, in this post, I'd like to motivate a kernel regression point of view. This viewpoint is well-motivated by the architectural design of the model, which is why I particularly like it. In modern ML, architectural designs can seem very black-boxy!</p>
+
+        <p>In a nutshell, what tabular foundation models do is they embed each row in your context, as well as the query row, and let the query attend to all of these context embeddings. This lends itself naturally to a kernel regression interpretation of tabular foundation models. The query decides how important each context point is towards prediction. This creates a <it>target-aware</it> kernel.</p>
+        
+        <p>Here's a general retrieval algorithm using tabular foundation models. You can use a (good) tabular foundation model of your choice, denoted TFM.</p>
+
+        <div class="algo-box">
+            <div class="algo-title">Algorithm: \(\textbf{SoftRetrieve}(\mathcal{D}, x)\)</div>
+            <div class="algo-io">
+                <strong>Input:</strong> \(\mathcal{D} = \{x_1, \ldots, x_n\}\), query point \(x\)<br>
+                <strong>Output:</strong> soft retrieval weights over \(\mathcal{D}\) for \(x\)
+            </div>
+            <ol class="algo-steps">
+                <li>Run \(\mathrm{TFM}(\text{context} = \mathcal{D},\ \text{queries} = \mathcal{D})\).</li>
+                <li>For each head \(h\), compute self-attention \(\displaystyle s_h = \frac{1}{n}\sum_{i=1}^{n} \alpha_h(x_i, x_i)\).</li>
+                <li>Let \(h^\ast = \arg\max_h s_h\).</li>
+                <li>Run \(\mathrm{TFM}(\text{context} = \mathcal{D},\ \text{query} = x)\).</li>
+                <li><strong>return</strong> \(\alpha_{h^\ast}(\cdot,\, x)\).</li>
+            </ol>
+        </div>
+        <p>In my experiments, I found that these weights this soft retrieval was quite good - the kernel regression estimate that resulted from it was better than LGBM in some cases (in particular the example below), and very predictive.</p>
+        <p>Here, we demonstrate this algorithm on a Spotify dataset, where the goal is to predict the popularity of a song. Our TFM of choice is TabICLv2. We found that the average <a href="https://en.wikipedia.org/wiki/R%C3%A9nyi_entropy#Special_cases" target="_blank" rel="noopener">IPR</a> was \(11.86\) (with a context size of \(5000\)), showing that the TFM identifies incredibly tight neighborhoods. This phenomenon is not particular to TabICLv2.</p>
+
+        <figure class="bubble-figure" id="bubbleDiagram">
+            <div class="bubble-controls">
+                <button class="sim-btn bubble-regenerate" id="bubbleRegenerate" type="button">&#8635; Regenerate</button>
+                <button class="sim-btn bubble-search-toggle" id="bubbleSearchToggle" type="button">Search</button>
+            </div>
+            <div class="bubble-loading" id="bubbleLoading">Loading track data&hellip;</div>
+            <div class="bubble-query-player">
+                <iframe src="" width="100%" height="152" frameborder="0" allow="encrypted-media" loading="lazy" title="Query track preview"></iframe>
+            </div>
+            <div class="bubble-canvas-box">
+                <svg class="bubble-svg" viewBox="0 0 420 420" xmlns="http://www.w3.org/2000/svg"></svg>
+            </div>
+            <div class="bubble-search" id="bubbleSearch" style="display:none">
+                <input type="text" class="bubble-search-input" id="bubbleSearchInput" placeholder="Search any of the 4,000 query tracks by title or artist&hellip;">
+                <div class="bubble-search-results" id="bubbleSearchResults"></div>
+            </div>
+            <div class="bubble-detail" id="bubbleDetail" style="display:none">
+                <div class="bubble-detail-player">
+                    <iframe id="bubbleDetailIframe" src="" width="100%" height="152" frameborder="0" allow="encrypted-media" loading="lazy" title="Selected track preview"></iframe>
+                </div>
+                <div class="bubble-detail-attrs" id="bubbleDetailAttrs"></div>
+            </div>
+        </figure>
 
     </main>
 
 <!-- <footer>[1] <br>
         [2] </footer> -->
+    </div>
+
+    <script>
+    (function () {
+        'use strict';
+
+        var SVG_NS = 'http://www.w3.org/2000/svg';
+        var XLINK_NS = 'http://www.w3.org/1999/xlink';
+        var DATA_URL = 'bubble_data.json';
+
+        var GOLDEN_ANGLE = 137.50776405003785 * Math.PI / 180;
+        var CENTER_R = 54;         // the query bubble's own radius
+        var RING_BASE_MIN = 90;    // starting point before enforcing min spacing
+        var RING_GROWTH = 37;
+        var MIN_NEIGHBOR_R = 14, MAX_NEIGHBOR_R = 32;
+        var MIN_SIZE = 420;
+        var MIN_GAP_PX = 37.8;     // ~1cm at 96dpi, measured at the canvas's actual rendered width
+        var SEARCH_RESULT_LIMIT = 40;
+
+        var TRACKS = null, QUERIES = null;
+        var currentIndex = 0;
+        var artCache = {};
+        var artClipCounter = 0;
+
+        var svgEl, playerEl, detailEl, detailIframeEl, detailAttrsEl,
+            regenBtn, searchToggleBtn, searchBoxEl, searchInputEl, searchResultsEl,
+            canvasBoxEl, loadingEl;
+
+        function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+
+        function fetchArt(id) {
+            if (artCache[id]) return artCache[id];
+            var url = 'https://open.spotify.com/oembed?url=' + encodeURIComponent('https://open.spotify.com/track/' + id);
+            var p = fetch(url).then(function (r) {
+                if (!r.ok) throw new Error('bad response');
+                return r.json();
+            }).then(function (data) {
+                return (data && data.thumbnail_url) ? data.thumbnail_url : null;
+            }).catch(function () { return null; });
+            artCache[id] = p;
+            return p;
+        }
+
+        function scaleRadius(pop, minPop, maxPop) {
+            if (maxPop === minPop) return (MIN_NEIGHBOR_R + MAX_NEIGHBOR_R) / 2;
+            var t = (pop - minPop) / (maxPop - minPop);
+            return MIN_NEIGHBOR_R + t * (MAX_NEIGHBOR_R - MIN_NEIGHBOR_R);
+        }
+
+        // Grows the center-to-ring radius until the nearest neighbor sits at
+        // least ~1cm (in real rendered pixels) from the query bubble, given
+        // the canvas's current on-screen width (the <svg> scales to fill it).
+        function computeLayout(n, containerPx) {
+            var ringBase = RING_BASE_MIN, size, maxR;
+            for (var iter = 0; iter < 60; iter++) {
+                maxR = ringBase + RING_GROWTH * Math.sqrt(Math.max(0, n - 1));
+                size = Math.max(MIN_SIZE, Math.ceil((maxR + MAX_NEIGHBOR_R + 24) * 2));
+                var scale = containerPx / size;
+                if (ringBase * scale >= MIN_GAP_PX) break;
+                ringBase += 5;
+            }
+            return { size: size, cx: size / 2, cy: size / 2, ringBase: ringBase };
+        }
+
+        function placeholderBubbleMarkup(cx, cy, r, ringClass) {
+            return '<circle class="bubble-placeholder" cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="' + r.toFixed(1) + '" fill="#eee" style="pointer-events:none"/>' +
+                '<circle class="' + ringClass + '" cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="' + r.toFixed(1) + '" style="pointer-events:none"/>' +
+                '<circle class="bubble-hit" cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="' + r.toFixed(1) + '" fill="transparent"/>';
+        }
+
+        function buildBubbleSvg(q) {
+            var neighbors = q.neighbors;
+            var containerPx = (canvasBoxEl && canvasBoxEl.clientWidth) || 700;
+            var layout = computeLayout(neighbors.length, containerPx);
+            var cx = layout.cx, cy = layout.cy, ringBase = layout.ringBase;
+            var pops = neighbors.map(function (n) { return TRACKS[n.id].popularity; });
+            var minPop = Math.min.apply(null, pops), maxPop = Math.max.apply(null, pops);
+
+            var positions = neighbors.map(function (n, i) {
+                var angle = i * GOLDEN_ANGLE;
+                var r = ringBase + RING_GROWTH * Math.sqrt(i);
+                return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
+            });
+
+            var body = ['<defs></defs>'];
+            body.push('<g class="bubble-center" data-kind="query" tabindex="0">' +
+                placeholderBubbleMarkup(cx, cy, CENTER_R, 'bubble-center-ring') + '</g>');
+
+            var radii = [];
+            neighbors.forEach(function (n, i) {
+                var p = positions[i];
+                var r = scaleRadius(TRACKS[n.id].popularity, minPop, maxPop);
+                radii.push(r);
+                body.push('<g class="bubble-neighbor" data-kind="neighbor" data-idx="' + i + '" tabindex="0">' +
+                    placeholderBubbleMarkup(p.x, p.y, r, 'bubble-neighbor-ring') + '</g>');
+            });
+
+            return { size: layout.size, cx: cx, cy: cy, positions: positions, radii: radii, markup: body.join('\n') };
+        }
+
+        function applyArt(groupEl, cx, cy, r, url) {
+            var defs = svgEl.querySelector('defs');
+            if (!defs || !groupEl) return;
+            var clipId = 'bubble-art-clip-' + (artClipCounter++);
+            var clip = document.createElementNS(SVG_NS, 'clipPath');
+            clip.setAttribute('id', clipId);
+            var cc = document.createElementNS(SVG_NS, 'circle');
+            cc.setAttribute('cx', cx.toFixed(1));
+            cc.setAttribute('cy', cy.toFixed(1));
+            cc.setAttribute('r', r.toFixed(1));
+            clip.appendChild(cc);
+            defs.appendChild(clip);
+
+            var img = document.createElementNS(SVG_NS, 'image');
+            img.setAttributeNS(XLINK_NS, 'href', url);
+            img.setAttribute('href', url);
+            img.setAttribute('x', (cx - r).toFixed(1));
+            img.setAttribute('y', (cy - r).toFixed(1));
+            img.setAttribute('width', (r * 2).toFixed(1));
+            img.setAttribute('height', (r * 2).toFixed(1));
+            img.setAttribute('preserveAspectRatio', 'xMidYMid slice');
+            img.setAttribute('clip-path', 'url(#' + clipId + ')');
+            img.style.pointerEvents = 'none';
+
+            var placeholder = groupEl.querySelector('circle.bubble-placeholder');
+            groupEl.insertBefore(img, groupEl.firstChild);
+            if (placeholder) placeholder.parentNode.removeChild(placeholder);
+        }
+
+        function loadArtForCurrentExample(q, built) {
+            var myIndex = currentIndex;
+            var centerG = svgEl.querySelector('.bubble-center');
+            fetchArt(q.id).then(function (url) {
+                if (currentIndex !== myIndex || !url) return;
+                applyArt(centerG, built.cx, built.cy, CENTER_R, url);
+            });
+            q.neighbors.forEach(function (n, i) {
+                fetchArt(n.id).then(function (url) {
+                    if (currentIndex !== myIndex || !url) return;
+                    var g = svgEl.querySelector('.bubble-neighbor[data-idx="' + i + '"]');
+                    if (!g) return;
+                    applyArt(g, built.positions[i].x, built.positions[i].y, built.radii[i], url);
+                });
+            });
+        }
+
+        function detailRow(label, value) {
+            return '<div class="bubble-detail-row"><span class="bubble-detail-label">' + label +
+                '</span><span class="bubble-detail-value">' + value + '</span></div>';
+        }
+
+        function showDetail(trackId, weight) {
+            var t = TRACKS[trackId];
+            if (!t) return;
+            detailIframeEl.src = 'https://open.spotify.com/embed/track/' + trackId;
+            var html = '<div class="bubble-detail-rows">' +
+                detailRow('Energy', t.energy.toFixed(2)) +
+                detailRow('Loudness', t.loudness.toFixed(1) + ' dB') +
+                detailRow('Instrumentalness', t.instrumentalness.toFixed(3)) +
+                detailRow('Release year', t.release_year) +
+                detailRow('Tempo', Math.round(t.tempo) + ' BPM') +
+                '</div>';
+            html += '<div class="bubble-detail-target">Popularity (target): ' + Math.round(t.popularity) + '</div>';
+            if (weight != null) {
+                html += '<div class="bubble-detail-weight">\\(\\alpha = ' + weight.toFixed(4) + '\\)</div>';
+            }
+            detailAttrsEl.innerHTML = html;
+            detailEl.style.display = '';
+            if (window.MathJax && window.MathJax.typesetPromise) {
+                window.MathJax.typesetPromise([detailAttrsEl]).catch(function () {});
+            }
+        }
+
+        function hideDetail() {
+            detailEl.style.display = 'none';
+            detailIframeEl.src = '';
+            detailAttrsEl.innerHTML = '';
+        }
+
+        function wireBubbleClicks(q) {
+            var centerG = svgEl.querySelector('.bubble-center');
+            if (centerG) {
+                centerG.addEventListener('click', function () { showDetail(q.id, null); });
+                centerG.addEventListener('keydown', function (e) { if (e.key === 'Enter') showDetail(q.id, null); });
+            }
+            svgEl.querySelectorAll('.bubble-neighbor').forEach(function (g) {
+                var idx = parseInt(g.getAttribute('data-idx'), 10);
+                var n = q.neighbors[idx];
+                g.addEventListener('click', function () { showDetail(n.id, n.weight); });
+                g.addEventListener('keydown', function (e) { if (e.key === 'Enter') showDetail(n.id, n.weight); });
+            });
+        }
+
+        // --- search across all query tracks (select one to make it the new query) ---
+
+        function renderSearchResults() {
+            var q = searchInputEl.value.trim().toLowerCase();
+            if (!q) {
+                searchResultsEl.innerHTML = '<div class="bubble-search-empty">Type a song or artist name to search the 4,000 query tracks.</div>';
+                return;
+            }
+            var matches = [];
+            for (var i = 0; i < QUERIES.length; i++) {
+                var t = TRACKS[QUERIES[i].id];
+                if (t.name.toLowerCase().indexOf(q) !== -1 || t.artist.toLowerCase().indexOf(q) !== -1) {
+                    matches.push(i);
+                    if (matches.length >= 400) break;
+                }
+            }
+            matches.sort(function (a, b) { return TRACKS[QUERIES[b].id].popularity - TRACKS[QUERIES[a].id].popularity; });
+            matches = matches.slice(0, SEARCH_RESULT_LIMIT);
+            if (matches.length === 0) {
+                searchResultsEl.innerHTML = '<div class="bubble-search-empty">No matching query tracks.</div>';
+                return;
+            }
+            searchResultsEl.innerHTML = matches.map(function (idx) {
+                var tt = TRACKS[QUERIES[idx].id];
+                return '<div class="bubble-list-row" data-qidx="' + idx + '" tabindex="0">' +
+                    '<img class="bubble-list-art" data-track-id="' + esc(QUERIES[idx].id) + '" alt="">' +
+                    '<div class="bubble-list-info">' +
+                        '<div class="bubble-list-name">' + esc(tt.name) + '</div>' +
+                        '<div class="bubble-list-artist">' + esc(tt.artist) + '</div>' +
+                    '</div>' +
+                    '<div class="bubble-list-pop">' + Math.round(tt.popularity) + '</div>' +
+                '</div>';
+            }).join('');
+            searchResultsEl.querySelectorAll('.bubble-list-row').forEach(function (row) {
+                var idx = parseInt(row.getAttribute('data-qidx'), 10);
+                row.addEventListener('click', function () { selectQuery(idx); });
+                row.addEventListener('keydown', function (e) { if (e.key === 'Enter') selectQuery(idx); });
+            });
+            searchResultsEl.querySelectorAll('img.bubble-list-art').forEach(function (img) {
+                var id = img.getAttribute('data-track-id');
+                fetchArt(id).then(function (url) { if (url) img.src = url; });
+            });
+        }
+
+        function closeSearch() {
+            searchBoxEl.style.display = 'none';
+            canvasBoxEl.style.display = '';
+            searchInputEl.value = '';
+            if (searchToggleBtn) searchToggleBtn.textContent = 'Search';
+        }
+
+        function toggleSearch() {
+            var isOpen = searchBoxEl.style.display !== 'none';
+            if (isOpen) {
+                closeSearch();
+            } else {
+                canvasBoxEl.style.display = 'none';
+                searchBoxEl.style.display = '';
+                searchToggleBtn.textContent = 'Show bubbles';
+                renderSearchResults();
+                searchInputEl.focus();
+            }
+        }
+
+        function selectQuery(idx) {
+            closeSearch();
+            renderExample(idx);
+        }
+
+        function renderExample(idx) {
+            currentIndex = idx;
+            var q = QUERIES[idx];
+            hideDetail();
+            playerEl.src = 'https://open.spotify.com/embed/track/' + q.id;
+            var built = buildBubbleSvg(q);
+            svgEl.setAttribute('viewBox', '0 0 ' + built.size + ' ' + built.size);
+            svgEl.innerHTML = built.markup;
+            wireBubbleClicks(q);
+            loadArtForCurrentExample(q, built);
+        }
+
+        function regenerate() {
+            if (!QUERIES || QUERIES.length < 2) return;
+            var next;
+            do { next = Math.floor(Math.random() * QUERIES.length); } while (next === currentIndex);
+            closeSearch();
+            renderExample(next);
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            svgEl = document.querySelector('#bubbleDiagram .bubble-svg');
+            playerEl = document.querySelector('#bubbleDiagram .bubble-query-player iframe');
+            canvasBoxEl = document.querySelector('#bubbleDiagram .bubble-canvas-box');
+            detailEl = document.getElementById('bubbleDetail');
+            detailIframeEl = document.getElementById('bubbleDetailIframe');
+            detailAttrsEl = document.getElementById('bubbleDetailAttrs');
+            regenBtn = document.getElementById('bubbleRegenerate');
+            searchToggleBtn = document.getElementById('bubbleSearchToggle');
+            searchBoxEl = document.getElementById('bubbleSearch');
+            searchInputEl = document.getElementById('bubbleSearchInput');
+            searchResultsEl = document.getElementById('bubbleSearchResults');
+            loadingEl = document.getElementById('bubbleLoading');
+            if (!svgEl || !playerEl || !detailEl) return;
+
+            if (regenBtn) regenBtn.addEventListener('click', regenerate);
+            if (searchToggleBtn) searchToggleBtn.addEventListener('click', toggleSearch);
+            if (searchInputEl) searchInputEl.addEventListener('input', renderSearchResults);
+
+            fetch(DATA_URL).then(function (r) { return r.json(); }).then(function (data) {
+                TRACKS = data.tracks;
+                QUERIES = data.queries;
+                if (loadingEl) loadingEl.style.display = 'none';
+                renderExample(Math.floor(Math.random() * QUERIES.length));
+            }).catch(function () {
+                if (loadingEl) loadingEl.textContent = 'Could not load track data.';
+            });
+        });
+    })();
+    </script>
+
+    <script>
+    (function () {
+        'use strict';
+        var PASSWORD = 'cluster';
+        var STORAGE_KEY = 'blog90226-unlocked';
+        var gate = document.getElementById('passwordGate');
+        var content = document.getElementById('protectedContent');
+        var input = document.getElementById('passwordInput');
+        var error = document.getElementById('passwordError');
+        var submit = document.getElementById('passwordSubmit');
+
+        function unlock() {
+            gate.style.display = 'none';
+            content.style.display = '';
+            try { sessionStorage.setItem(STORAGE_KEY, '1'); } catch (e) { /* ignore */ }
+        }
+
+        function tryUnlock() {
+            if (input.value === PASSWORD) {
+                unlock();
+            } else {
+                error.textContent = 'Incorrect password.';
+                input.value = '';
+                input.focus();
+            }
+        }
+
+        submit.addEventListener('click', tryUnlock);
+        input.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') tryUnlock();
+        });
+
+        try {
+            if (sessionStorage.getItem(STORAGE_KEY) === '1') unlock();
+        } catch (e) { /* ignore */ }
+    })();
+    </script>
 </body>
 </html>

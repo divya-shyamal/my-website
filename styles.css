@@ -344,6 +344,11 @@ footer {
     margin-bottom: 6px;
 }
 
+.results-metric-arrow {
+    font-size: 0.85em;
+    color: #bbb;
+}
+
 .results-bar-row {
     display: flex;
     align-items: center;
@@ -372,7 +377,7 @@ footer {
 .results-bar-value {
     font-size: 0.8em;
     color: #666;
-    min-width: 30px;
+    min-width: 46px;
     text-align: right;
     font-variant-numeric: tabular-nums;
     flex-shrink: 0;
@@ -425,184 +430,313 @@ footer {
     }
 }
 
-/* --- Attention illustration (blog90226.html) --- */
+/* --- Algorithm box (blog90226.html) --- */
 
-.attn-figure {
-    margin: 2.5em 0;
+.algo-box {
+    border: 1.5px solid #E8A0BF;
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin: 1.5em 0 2em;
+    background: #FFFBFD;
 }
 
-.attn-canvas-box {
+.algo-title {
+    font-weight: bold;
+    font-size: 1.05em;
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #f3dfe7;
+}
+
+.algo-io {
+    font-size: 0.95em;
+    color: #555;
+    margin-bottom: 14px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid #f3dfe7;
+    line-height: 1.7;
+}
+
+.algo-steps {
+    margin: 0;
+    padding-left: 1.4em;
+    line-height: 2;
+}
+
+.algo-steps li {
+    margin-bottom: 4px;
+}
+
+.algo-comment {
+    display: block;
+    color: #999;
+    font-size: 0.82em;
+    font-style: italic;
+    margin-top: 2px;
+}
+
+/* --- Password gate (blog90226.html) --- */
+
+.password-gate {
+    min-height: 60vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.password-gate-box {
+    text-align: center;
+    padding: 32px 36px;
     background: #ffffff;
-    border-radius: 8px;
-    padding: 20px 16px 12px;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+}
+
+.password-gate-label {
+    color: #666;
+    margin: 0 0 16px;
+}
+
+.password-gate-input {
+    font-family: 'Crimson Text', serif;
+    font-size: 1em;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    margin-right: 8px;
+    width: 160px;
+}
+
+.password-gate-input:focus {
+    outline: none;
+    border-color: #E8A0BF;
+}
+
+.password-gate-error {
+    color: #C75B8C;
+    font-size: 0.85em;
+    min-height: 1.2em;
+    margin: 12px 0 0;
+}
+
+/* --- Attention bubble chart (blog90226.html) --- */
+
+.bubble-figure {
+    margin: 2em 0;
+}
+
+.bubble-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.bubble-loading {
+    color: #888;
+    font-size: 0.9em;
+    margin-bottom: 14px;
+}
+
+.bubble-query-player {
+    margin-bottom: 14px;
+    border-radius: 12px;
+    overflow: hidden;
+    line-height: 0;
+}
+
+.bubble-canvas-box {
     box-sizing: border-box;
 }
 
-.attn-svg {
+.bubble-svg {
     width: 100%;
     height: auto;
     display: block;
 }
 
-.attn-svg text {
-    font-family: 'Crimson Text', serif;
+.bubble-center,
+.bubble-neighbor {
+    cursor: pointer;
 }
 
-.attn-svg .header-text {
-    font-size: 11px;
-    fill: #999;
-}
-
-.attn-svg .cell-text {
-    font-size: 12.5px;
-    fill: #333;
-}
-
-.attn-svg .row-line {
-    stroke: #eee;
-    stroke-width: 1;
-}
-
-.attn-svg .query-row-line {
-    stroke: #C75B8C;
-    stroke-width: 1.2;
-    stroke-dasharray: 3 3;
-}
-
-.attn-svg .query-label {
-    font-style: italic;
-    fill: #C75B8C;
-}
-
-.attn-svg .outcome-mark {
-    fill: #aaa;
-    transition: opacity 0.45s ease;
-}
-
-.attn-svg.stage-4 .outcome-mark {
-    opacity: 0;
-}
-
-.attn-svg .outcome-predicted {
-    fill: #C75B8C;
-    font-weight: bold;
-}
-
-.attn-svg .connector {
-    stroke: #ccc;
-    stroke-width: 1;
-}
-
-.attn-svg .emb-cell {
-    fill: #C75B8C;
-}
-
-.attn-svg .arc-path {
+.bubble-center-ring {
     fill: none;
     stroke: #C75B8C;
+    stroke-width: 3;
+    transition: stroke-width 0.15s ease;
 }
 
-.attn-svg .weight-label {
-    font-size: 11px;
-    fill: #C75B8C;
+.bubble-center:hover .bubble-center-ring,
+.bubble-center:focus .bubble-center-ring {
+    stroke-width: 4.5;
 }
 
-.attn-svg .outcome-highlight {
-    fill: #C75B8C;
+.bubble-neighbor-ring {
+    fill: none;
+    stroke: #4A6FC7;
+    stroke-width: 2;
+    transition: stroke-width 0.15s ease;
 }
 
-.attn-svg [data-layer] {
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.45s ease;
+.bubble-neighbor:hover .bubble-neighbor-ring,
+.bubble-neighbor:focus .bubble-neighbor-ring {
+    stroke-width: 3.5;
 }
 
-.attn-svg.stage-2 [data-layer="embeddings"],
-.attn-svg.stage-3 [data-layer="embeddings"],
-.attn-svg.stage-4 [data-layer="embeddings"] {
-    opacity: 1;
-    pointer-events: auto;
+.bubble-search {
+    box-sizing: border-box;
 }
 
-.attn-svg.stage-3 [data-layer="arcs"],
-.attn-svg.stage-4 [data-layer="arcs"] {
-    opacity: 1;
-    pointer-events: auto;
-}
-
-.attn-svg.stage-4 [data-layer="arcs"] {
-    opacity: 0.45;
-}
-
-.attn-svg.stage-4 [data-layer="combine"] {
-    opacity: 1;
-    pointer-events: auto;
-}
-
-.attn-stepper {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    margin: 16px 0 6px;
-}
-
-.attn-dot {
-    width: 26px;
-    height: 26px;
-    border-radius: 50%;
-    border: 1.5px solid #ddd;
-    background: #fff;
-    color: #999;
-    font-size: 0.8em;
+.bubble-search-input {
+    width: 100%;
     font-family: 'Crimson Text', serif;
+    font-size: 1em;
+    padding: 9px 14px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    box-sizing: border-box;
+    margin-bottom: 10px;
+}
+
+.bubble-search-input:focus {
+    outline: none;
+    border-color: #E8A0BF;
+}
+
+.bubble-search-results {
+    max-height: 320px;
+    overflow-y: auto;
+    background: #ffffff;
+    border-radius: 8px;
+    padding: 4px 14px;
+    box-sizing: border-box;
+}
+
+.bubble-search-empty {
+    color: #888;
+    font-size: 0.9em;
+    padding: 14px 4px;
+    text-align: center;
+}
+
+.bubble-list-row {
     display: flex;
     align-items: center;
-    justify-content: center;
+    gap: 12px;
+    padding: 8px 0;
+    border-bottom: 1px solid #f3dfe7;
     cursor: pointer;
-    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-    padding: 0;
 }
 
-.attn-dot.done {
-    background: #F9D5E5;
-    border-color: #f3dfe7;
-    color: #C75B8C;
+.bubble-list-row:last-child {
+    border-bottom: none;
 }
 
-.attn-dot.current {
-    background: #C75B8C;
-    border-color: #C75B8C;
-    color: #fff;
+.bubble-list-row:hover {
+    background: #FFFBFD;
 }
 
-.attn-dot-line {
-    width: 26px;
-    height: 1.5px;
+.bubble-list-art {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
     background: #eee;
 }
 
-.attn-caption {
-    text-align: center;
+.bubble-list-info {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.bubble-list-name {
+    font-size: 0.92em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.bubble-list-artist {
+    font-size: 0.78em;
+    color: #888;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.bubble-list-pop {
     font-size: 0.85em;
-    color: #555;
-    min-height: 2.6em;
-    margin: 6px 0 14px;
-    line-height: 1.4;
-    padding: 0 12px;
+    color: #C75B8C;
+    font-weight: bold;
+    flex-shrink: 0;
 }
 
-.attn-buttons {
+.bubble-detail {
+    margin-top: 16px;
     display: flex;
-    justify-content: center;
-    gap: 8px;
-    margin-top: 2px;
+    gap: 20px;
+    background: #ffffff;
+    border-radius: 8px;
+    padding: 16px 20px;
+    box-sizing: border-box;
 }
 
-.attn-figure figcaption {
-    font-size: 0.75em;
-    color: #666;
-    margin-top: 12px;
-    line-height: 1.4;
-    text-align: center;
+.bubble-detail-player {
+    flex: 1 1 50%;
+    min-width: 0;
+    border-radius: 12px;
+    overflow: hidden;
+    line-height: 0;
+    align-self: center;
+}
+
+.bubble-detail-attrs {
+    flex: 1 1 50%;
+    min-width: 0;
+}
+
+.bubble-detail-rows {
+    margin-bottom: 10px;
+}
+
+.bubble-detail-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.88em;
+    padding: 3px 0;
+    border-bottom: 1px solid #f3dfe7;
+}
+
+.bubble-detail-row:last-child {
+    border-bottom: none;
+}
+
+.bubble-detail-label {
+    color: #888;
+}
+
+.bubble-detail-value {
+    color: #333;
+    font-variant-numeric: tabular-nums;
+}
+
+.bubble-detail-target {
+    color: #C75B8C;
+    font-weight: bold;
+    font-size: 0.95em;
+    margin-bottom: 6px;
+}
+
+.bubble-detail-weight {
+    color: #4A6FC7;
+    font-size: 0.85em;
+    margin-bottom: 10px;
+}
+
+@media (max-width: 640px) {
+    .bubble-detail {
+        flex-direction: column;
+    }
 }

@@ -26,10 +26,10 @@
         <p>David also pointed out the tradeoff between fairness and global efficiency. A fair algorithm would prioritize people based on when they requested the elevator - first come, first served. On the other hand, one could design an algorithm that aimed to minimize the cumulative wait time of people. </p>
         <p>The mechanics of the elevator matter too. Say the elevator is fast. Then stopping at a floor becomes relatively more costly.</p>
         <p>Let's formalize the problem. There's two types of real-time information we are getting. First, there's pick-up requests, which just consists of the direction they intend to go to (up or down). Let's denote a request by \((f_i, s_i, t_i)\), where \(f_i\) denotes the floor number where the request was made, \(s_i\in \{-1, 1\}\) denotes the direction, and \(t_i\) denotes the time of the request. Second, there's drop-off requests: people who have just gotten in the elevator and indicate the floor they would like to be taken to. We'll denote these requests by \((d_i, t_i)\) where \(d_i\) denotes the destination floor.</p>
-        <p>Let's try to recreate the algorithm that most elevators use. Here's my guess: let's say the elevator is currently going in a direction (either up or down). Then, it will keep a list of pick-up and drop-off floors above and below it at all times. The elevator keeps moving in a given direction until all requests in that direction have been serviced, then it switches directions. Let's call this the "baseline" algorithm.</p>
+        <p>Let's try to recreate the algorithm that most elevators use. Here's my guess: let's say the elevator is currently going in a direction (either up or down). Then, it will keep a list of pick-up and drop-off floors above and below it at all times. The elevator keeps moving in a given direction until all requests in that direction have been serviced, then it switches directions. Let's call this the "directional" algorithm.</p>
         <p>What are some inefficiencies of this algorithm? First, where the elevator "parks" is important. If most people enter or exit the elevator at the first floor, parking there might make sense. Frustratingly, the elevator in my work building does not exhibit this behavior!</p>
-        <p>Second, let's take the case of a really tall building, where the elevator is on a downward trajectory from floor \(n-1\) to \(1\). Let's say just as the person on \(n-1\) is picked up and requests floor \(1\), someone on floor \(n\) requests the elevator. Then the elevator will go all the way down to lobby, and leave the person on the top floor waiting for a long time. A better algorithm may have been to go up and get the person on the top floor before beginning its descent.</p>
-        <p>This, of course, is an edge case. We'll try to iteratively improve on this algorithm throughout the rest of this post. But first, let's simulate all of these algorithms, as well as first-come first-served, to see how these work in practice! As a first step towards improving the algorithm, I've included a nearest-request algorithm as well, which takes care of the edge case we mentioned earlier.</p>
+        <p>Second, let's take the case of a really tall building, where the elevator is on a downward trajectory from floor \(n-1\) to \(1\). Let's say just as the person on \(n-1\) is picked up and requests floor \(1\), someone on floor \(n\) requests the elevator. Then the elevator will go all the way down to lobby, and leave the person on the top floor waiting for a long time. A better algorithm may have been to go up and get the person on the top floor before beginning its descent. A "nearest request" algorithm takes care of this problem.</p>
+        <p>This, of course, is an edge case. We'll try to iteratively improve on this algorithm throughout the rest of this post. But first, let's simulate both of these algorithms, as well as first-come first-served, to see how these work in practice! As a first step towards improving the algorithm, I've included a nearest-request algorithm as well, which takes care of the edge case we mentioned earlier.</p>
 
         <p>Our simulation is based on a Poisson process, with floors \(1\) and \(3\) having a slightly higher pick-up and drop-off rate than the other residential floors.</p>
 
@@ -107,6 +107,47 @@
             if (d < bestDist) { bestDist = d; best = list[i]; }
         }
         return best;
+    }
+
+    // Every delivered person gets two whole-number ranks: the order they
+    // arrived in, and the order they were dropped off in. Each list is a
+    // strict 1..n permutation -- no shared numbers -- using id (the order
+    // events were generated) to break arrival ties, and arrival rank itself
+    // to break drop-off ties (people who leave the elevator at the same
+    // moment are deemed to step off in the order they originally arrived).
+    function assignRanks(deliveries) {
+        var n = deliveries.length;
+        var byArrival = deliveries.map(function (_, i) { return i; });
+        byArrival.sort(function (a, b) {
+            return deliveries[a].arriveTime - deliveries[b].arriveTime || deliveries[a].id - deliveries[b].id;
+        });
+        var arrivalRank = new Array(n);
+        byArrival.forEach(function (idx, pos) { arrivalRank[idx] = pos + 1; });
+
+        var byDropoff = deliveries.map(function (_, i) { return i; });
+        byDropoff.sort(function (a, b) {
+            return deliveries[a].deliverTime - deliveries[b].deliverTime || arrivalRank[a] - arrivalRank[b];
+        });
+        var dropoffRank = new Array(n);
+        byDropoff.forEach(function (idx, pos) { dropoffRank[idx] = pos + 1; });
+
+        return { arrivalRank: arrivalRank, dropoffRank: dropoffRank };
+    }
+
+    // Fairness: the Spearman rank correlation between arrival order and
+    // drop-off order, from the sum of squared rank differences. +1 means
+    // everyone was dropped off in exactly the order they arrived; -1 means
+    // the order was perfectly reversed.
+    function spearmanFairness(deliveries) {
+        var n = deliveries.length;
+        if (n < 2) return 1;
+        var ranks = assignRanks(deliveries);
+        var sumSq = 0;
+        for (var i = 0; i < n; i++) {
+            var d = ranks.dropoffRank[i] - ranks.arrivalRank[i];
+            sumSq += d * d;
+        }
+        return 1 - (6 * sumSq) / (n * (n * n - 1));
     }
 
     function roundRect(ctx, x, y, w, h, r) {
@@ -236,6 +277,7 @@
         this.delivered = 0;
         this.totalWait = 0;
         this.distance = 0;
+        this.deliveries = []; // { arriveTime, deliverTime } per delivered passenger, for fairness
         this.H = currentH();
         this.figScale = FLOOR_H / MAX_FLOOR_H;
         this.canvas = canvas;
@@ -357,6 +399,15 @@
         if (this.algoKey === 'scan' && this.elevator.direction !== 0) {
             return job.direction === this.elevator.direction;
         }
+        if (this.algoKey === 'fcfs') {
+            // Strictly one at a time: only the single oldest-waiting person
+            // may board, never anyone else who happens to be at this floor
+            // too -- otherwise a later arrival could ride along and reach
+            // their floor before an earlier arrival who's still waiting,
+            // which would make "first-come, first-served" not actually be.
+            var focus = this.oldestUndelivered();
+            return !!focus && !focus.boarded && focus.job.id === job.id;
+        }
         return true;
     };
 
@@ -397,6 +448,14 @@
     };
 
     Simulation.prototype.decide = function () {
+        if (Number.isInteger(this.elevator.pos)) {
+            // We're parked at a floor (not mid-flight) -- offer a boarding
+            // opportunity here first. Positional ahead/behind checks never
+            // consider the floor we're already standing at, so without this,
+            // someone who shows up while we're mid-dwell (after the initial
+            // arrival already processed boarding) would never get picked up.
+            this.boardAt(Math.round(this.elevator.pos));
+        }
         var prevDirection = this.elevator.direction;
         this.elevator.target = this.computeNext();
         if (this.algoKey === 'scan' && this.elevator.direction !== prevDirection) {
@@ -425,6 +484,7 @@
             if (p.dest === floor) {
                 self.delivered++;
                 self.totalWait += self.simTime - p.arriveTime;
+                self.deliveries.push({ id: p.id, arriveTime: p.arriveTime, deliverTime: self.simTime });
                 self.spawnWalker(p.id, floor, 'alight');
             } else stillOn.push(p);
         });
@@ -453,6 +513,13 @@
                 this.arriveAtFloor(el.target);
             }
         } else {
+            // Directional and Nearest should react to new information as it
+            // arrives, not sail past someone new because they committed to
+            // a target before that person showed up -- keep re-polling while
+            // en route. FCFS deliberately doesn't: it stays committed to its
+            // one focus job regardless of what else turns up, since that
+            // commitment is exactly what makes it strictly fair.
+            if (this.algoKey !== 'fcfs') this.decide();
             var dir = el.target > el.pos ? 1 : -1;
             var prevPos = el.pos;
             el.pos += dir * SPEED * dt;
@@ -712,10 +779,15 @@
     // before there's much data. The ceiling only ever grows from there, with
     // headroom, so a bar's length reflects genuine progress over the run
     // instead of always being rescaled to whoever's currently ahead.
+    // fixedRange metrics (a known, bounded domain -- no ratcheting ceiling
+    // needed) map straight onto the bar's 0-100% width.
+    // better: 'high' or 'low' -- just picks which arrow glyph hints at the
+    // direction a reader should root for next to the metric's label.
     var METRICS = [
-        { key: 'delivered', label: 'Delivered', get: function (s) { return s.delivered; }, decimals: 0, initialCeiling: 15 },
-        { key: 'wait', label: 'Avg wait (s)', get: function (s) { return s.delivered ? s.totalWait / s.delivered : 0; }, decimals: 1, initialCeiling: 15 },
-        { key: 'distance', label: 'Distance', get: function (s) { return s.distance; }, decimals: 0, initialCeiling: 60 }
+        { key: 'delivered', label: 'Delivered', get: function (s) { return s.delivered; }, decimals: 0, initialCeiling: 15, better: 'high' },
+        { key: 'wait', label: 'Avg wait (s)', get: function (s) { return s.delivered ? s.totalWait / s.delivered : 0; }, decimals: 1, initialCeiling: 15, better: 'low' },
+        { key: 'distance', label: 'Distance (floors)', get: function (s) { return s.distance; }, decimals: 0, initialCeiling: 60, better: 'low' },
+        { key: 'fairness', label: 'Fairness', get: function (s) { return spearmanFairness(s.deliveries); }, decimals: 3, fixedRange: [-1, 1], better: 'high' }
     ];
 
     ElevatorApp.prototype.buildResultsPanel = function (orderedKeys) {
@@ -723,8 +795,11 @@
         panel.className = 'sim-panel results-panel';
         var html = '<div class="sim-panel-header"><span class="sim-panel-title">Results</span></div>';
         METRICS.forEach(function (m) {
+            var arrow = m.better === 'high' ? '▲' : '▼';
             html += '<div class="results-metric" data-metric="' + m.key + '">' +
-                '<div class="results-metric-label">' + m.label + '</div>';
+                '<div class="results-metric-label">' + m.label +
+                    ' <span class="results-metric-arrow" title="' + (m.better === 'high' ? 'higher is better' : 'lower is better') + '">' + arrow + '</span>' +
+                '</div>';
             orderedKeys.forEach(function (key) {
                 html += '<div class="results-bar-row" data-algo="' + key + '">' +
                     '<div class="results-bar-track"><div class="results-bar-fill" style="background:' + ALGOS[key].color + '"></div></div>' +
@@ -741,7 +816,7 @@
         var self = this;
         METRICS.forEach(function (m) {
             self.resultsRefs[m.key] = {};
-            self.resultsCeilings[m.key] = m.initialCeiling;
+            if (m.initialCeiling !== undefined) self.resultsCeilings[m.key] = m.initialCeiling;
         });
         Array.prototype.forEach.call(panel.querySelectorAll('.results-bar-row'), function (row) {
             var metricKey = row.closest('.results-metric').getAttribute('data-metric');
@@ -759,20 +834,27 @@
         var refs = this.resultsRefs;
         var ceilings = this.resultsCeilings;
         METRICS.forEach(function (m) {
-            var values = sims.map(m.get);
-            var actualMax = Math.max.apply(null, values);
-            // Ratchet the ceiling up with headroom as values approach it --
-            // never down -- so bars genuinely grow instead of always being
-            // rescaled to whoever's currently ahead.
-            if (actualMax > ceilings[m.key] * 0.85) {
-                ceilings[m.key] = Math.max(actualMax * 1.35, m.initialCeiling);
+            var toPct;
+            if (m.fixedRange) {
+                var lo = m.fixedRange[0], hi = m.fixedRange[1];
+                toPct = function (v) { return Math.max(0, Math.min(100, ((v - lo) / (hi - lo)) * 100)); };
+            } else {
+                var values = sims.map(m.get);
+                var actualMax = Math.max.apply(null, values);
+                // Ratchet the ceiling up with headroom as values approach it
+                // -- never down -- so bars genuinely grow instead of always
+                // being rescaled to whoever's currently ahead.
+                if (actualMax > ceilings[m.key] * 0.85) {
+                    ceilings[m.key] = Math.max(actualMax * 1.35, m.initialCeiling);
+                }
+                var ceiling = ceilings[m.key];
+                toPct = function (v) { return ceiling > 0 ? Math.min(100, (v / ceiling) * 100) : 0; };
             }
-            var ceiling = ceilings[m.key];
             sims.forEach(function (s) {
                 var ref = refs[m.key][s.algoKey];
                 if (!ref) return;
                 var v = m.get(s);
-                ref.fill.style.width = (ceiling > 0 ? Math.min(100, (v / ceiling) * 100) : 0) + '%';
+                ref.fill.style.width = toPct(v) + '%';
                 ref.value.textContent = m.decimals ? v.toFixed(m.decimals) : String(Math.round(v));
             });
         });
