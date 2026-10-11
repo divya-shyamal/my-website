@@ -52,7 +52,7 @@
         </div>
         <p>In my experiments, I found that these weights this soft retrieval was quite good - the kernel regression estimate that resulted from it was better than LGBM in some cases (in particular the example below), and very predictive.</p>
         <p>Here, we demonstrate this algorithm on a Spotify dataset, where the goal is to predict the popularity of a song. Our TFM of choice is TabICLv2. We found that the average <a href="https://en.wikipedia.org/wiki/R%C3%A9nyi_entropy#Special_cases" target="_blank" rel="noopener">IPR</a> was \(11.86\) (with a context size of \(5000\)), showing that the TFM identifies incredibly tight neighborhoods. This phenomenon is not particular to TabICLv2.</p>
-        <p>We also demonstrate on a da</p>
+        <p>We also demonstrate on a dataset on \(515\) companies, where we predict valuation. </p>
 
         <div class="tab-bar">
             <button class="tab-btn active" id="tabBtnMusic" type="button">Music</button>
@@ -840,9 +840,12 @@
             html += '<div class="bubble-detail-name">' + esc(a.name) + ' (' + esc(tickerA) + ') ' + arrow + ' ' +
                 esc(b.name) + ' (' + esc(tickerB) + ')</div>';
             html += '<div class="bubble-detail-rows">' +
-                detailRow(esc(tickerA) + ' &rarr; ' + esc(tickerB), '\\(\\alpha = ' + wAB.toFixed(4) + '\\)') +
-                detailRow(esc(tickerB) + ' &rarr; ' + esc(tickerA), '\\(\\alpha = ' + wBA.toFixed(4) + '\\)') +
+                detailRow(esc(tickerA) + ' &rarr; ' + esc(tickerB) + (aToB ? ' &#9733;' : ''),
+                    '\\(\\alpha = ' + wAB.toFixed(4) + '\\)') +
+                detailRow(esc(tickerB) + ' &rarr; ' + esc(tickerA) + (bToA ? ' &#9733;' : ''),
+                    '\\(\\alpha = ' + wBA.toFixed(4) + '\\)') +
                 '</div>';
+            html += '<div class="bubble-detail-weight">&#9733; = among that company&rsquo;s own top-IPR neighbors</div>';
             html += '</div>';
             detailEl.innerHTML = html;
             detailEl.style.display = '';
@@ -998,7 +1001,7 @@
                 inDegMin = Math.min.apply(null, degs);
                 inDegMax = Math.max.apply(null, degs);
                 if (loadingEl) loadingEl.style.display = 'none';
-                renderZoom(Math.floor(Math.random() * QUERIES.length), true);
+                renderZoom(Math.floor(Math.random() * QUERIES.length));
             }).catch(function () {
                 if (loadingEl) loadingEl.textContent = 'Could not load company data.';
             });
