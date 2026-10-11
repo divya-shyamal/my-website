@@ -6,7 +6,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Blog</title>
-    <link rel="stylesheet" href="styles.css"> <!-- Link to your existing CSS file -->
+    <link rel="stylesheet" href="styles.css?v=2"> <!-- Link to your existing CSS file -->
     <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 
 </head>
@@ -14,8 +14,10 @@
     <div id="passwordGate" class="password-gate">
         <div class="password-gate-box">
             <p class="password-gate-label">This post is password protected.</p>
-            <input type="password" id="passwordInput" class="password-gate-input" placeholder="Password" autocomplete="off">
-            <button class="sim-btn" id="passwordSubmit">Unlock</button>
+            <div class="password-gate-row">
+                <input type="password" id="passwordInput" class="password-gate-input" placeholder="Password" autocomplete="off">
+                <button class="password-gate-submit" id="passwordSubmit">Unlock</button>
+            </div>
             <p class="password-gate-error" id="passwordError"></p>
         </div>
     </div>

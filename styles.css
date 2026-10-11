@@ -486,30 +486,54 @@ footer {
 
 .password-gate-box {
     text-align: center;
-    padding: 32px 36px;
-    background: #ffffff;
+    padding: 36px 40px;
+    background: #FFFBFD;
+    border: 1.5px solid #E8A0BF;
     border-radius: 12px;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
 }
 
 .password-gate-label {
     color: #666;
-    margin: 0 0 16px;
+    margin: 0 0 20px;
+    font-size: 1.1em;
+}
+
+.password-gate-row {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
 }
 
 .password-gate-input {
     font-family: 'Crimson Text', serif;
     font-size: 1em;
     padding: 8px 12px;
-    border: 1px solid #ddd;
+    border: 1px solid #f3dfe7;
     border-radius: 6px;
-    margin-right: 8px;
     width: 160px;
+    background: #ffffff;
 }
 
 .password-gate-input:focus {
     outline: none;
     border-color: #E8A0BF;
+}
+
+.password-gate-submit {
+    font-family: 'Crimson Text', serif;
+    font-size: 1em;
+    padding: 8px 18px;
+    border: none;
+    border-radius: 6px;
+    background: #E8A0BF;
+    color: #ffffff;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.password-gate-submit:hover {
+    background: #F9D5E5;
 }
 
 .password-gate-error {
